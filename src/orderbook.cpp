@@ -2,8 +2,12 @@
 #include <iostream>
 #include <iomanip>
 #include <limits>
+#include <algorithm>
 
 void OrderBook::addOrder(OrderPtr order) {
+    // Add to active orders tracking
+    active_orders[order->getOrderId()] = order;
+    
     if (order->getSide() == OrderSide::BUY) {
         bids[order->getPrice()].push(order);
     } else {
@@ -13,6 +17,9 @@ void OrderBook::addOrder(OrderPtr order) {
 
 std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
     std::vector<Trade> trades;
+    
+    // Add to active orders before matching
+    active_orders[incoming_order->getOrderId()] = incoming_order;
     
     if (incoming_order->getSide() == OrderSide::BUY) {
         // Match buy order against asks (sell side)
@@ -46,6 +53,7 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
                 trade_history.push_back(trade);
                 
                 if (match_order->isFilled()) {
+                    active_orders.erase(match_order->getOrderId());
                     ask_queue.pop();
                 }
             }
@@ -86,6 +94,7 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
                 trade_history.push_back(trade);
                 
                 if (match_order->isFilled()) {
+                    active_orders.erase(match_order->getOrderId());
                     bid_queue.pop();
                 }
             }
@@ -101,9 +110,106 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
         (incoming_order->getType() == OrderType::LIMIT_BUY || 
          incoming_order->getType() == OrderType::LIMIT_SELL)) {
         addOrder(incoming_order);
+    } else if (incoming_order->isFilled()) {
+        // Remove from active orders if fully filled
+        active_orders.erase(incoming_order->getOrderId());
     }
     
     return trades;
+}
+
+bool OrderBook::cancelOrder(uint64_t order_id) {
+    // Check if order exists in active orders
+    auto it = active_orders.find(order_id);
+    if (it == active_orders.end()) {
+        return false; // Order not found or already filled
+    }
+    
+    OrderPtr order = it->second;
+    double price = order->getPrice();
+    OrderSide side = order->getSide();
+    
+    // Remove from the appropriate price level queue
+    auto removeFromQueue = [&](std::queue<OrderPtr>& q) -> bool {
+        std::queue<OrderPtr> temp_queue;
+        bool found = false;
+        
+        while (!q.empty()) {
+            OrderPtr front_order = q.front();
+            q.pop();
+            
+            if (front_order->getOrderId() == order_id) {
+                found = true;
+                // Don't add it back to temp queue
+            } else {
+                temp_queue.push(front_order);
+            }
+        }
+        
+        // Restore the queue without the canceled order
+        while (!temp_queue.empty()) {
+            q.push(temp_queue.front());
+            temp_queue.pop();
+        }
+        
+        return found;
+    };
+    
+    bool removed = false;
+    if (side == OrderSide::BUY) {
+        auto bid_it = bids.find(price);
+        if (bid_it != bids.end()) {
+            removed = removeFromQueue(bid_it->second);
+            if (bid_it->second.empty()) {
+                bids.erase(bid_it);
+            }
+        }
+    } else {
+        auto ask_it = asks.find(price);
+        if (ask_it != asks.end()) {
+            removed = removeFromQueue(ask_it->second);
+            if (ask_it->second.empty()) {
+                asks.erase(ask_it);
+            }
+        }
+    }
+    
+    if (removed) {
+        active_orders.erase(it);
+        return true;
+    }
+    
+    return false;
+}
+
+bool OrderBook::modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity) {
+    // Check if order exists
+    auto it = active_orders.find(order_id);
+    if (it == active_orders.end()) {
+        return false;
+    }
+    
+    OrderPtr old_order = it->second;
+    
+    // Cancel the old order
+    if (!cancelOrder(order_id)) {
+        return false;
+    }
+    
+    // Create a new order with updated parameters but same ID and timestamp
+    OrderPtr new_order = std::make_shared<Order>(
+        old_order->getOrderId(),
+        old_order->getTimestamp(),
+        new_price,
+        new_quantity,
+        old_order->getType(),
+        old_order->getSide()
+    );
+    
+    // Add the modified order back to the book
+    addOrder(new_order);
+    
+    return true;
 }
 
 double OrderBook::getBestBid() const {
@@ -142,6 +248,7 @@ void OrderBook::printBook() const {
     std::cout << "--------------------------------" << std::endl;
     std::cout << "Spread: " << std::fixed << std::setprecision(2) 
               << getSpread() << std::endl;
+    std::cout << "Active Orders: " << active_orders.size() << std::endl;
     std::cout << "--------------------------------" << std::endl;
     
     std::cout << "BIDS (Buy Orders):" << std::endl;

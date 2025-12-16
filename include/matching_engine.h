@@ -16,8 +16,12 @@ private:
 public:
     MatchingEngine();
     
-    void submitLimitOrder(OrderSide side, double price, uint64_t quantity);
+    uint64_t submitLimitOrder(OrderSide side, double price, uint64_t quantity);
     void submitMarketOrder(OrderSide side, uint64_t quantity);
+    
+    // New order management methods
+    bool cancelOrder(uint64_t order_id);
+    bool modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity);
     
     void printBook() const;
     void printTrades() const;

@@ -6,6 +6,7 @@
 #include <queue>
 #include <memory>
 #include <vector>
+#include <unordered_map>
 
 using OrderPtr = std::shared_ptr<Order>;
 
@@ -25,6 +26,9 @@ private:
     // Asks: price -> queue of orders (ascending by price)
     std::map<double, std::queue<OrderPtr>, std::less<double>> asks;
     
+    // Track all active orders by ID for cancellation/modification
+    std::unordered_map<uint64_t, OrderPtr> active_orders;
+    
     std::vector<Trade> trade_history;
     
 public:
@@ -32,6 +36,10 @@ public:
     
     void addOrder(OrderPtr order);
     std::vector<Trade> matchOrder(OrderPtr order);
+    
+    // Order management
+    bool cancelOrder(uint64_t order_id);
+    bool modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity);
     
     double getBestBid() const;
     double getBestAsk() const;
@@ -42,6 +50,7 @@ public:
     
     size_t getBidDepth() const;
     size_t getAskDepth() const;
+    size_t getActiveOrderCount() const { return active_orders.size(); }
 };
 
 #endif
