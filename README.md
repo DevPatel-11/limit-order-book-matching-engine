@@ -7,8 +7,10 @@ A high-performance exchange-style limit order book implementation with price-tim
 - **Price-Time Priority Matching**: Orders matched at best price, with time priority for same price levels
 - **Order Types**: Support for Limit Buy/Sell and Market Buy/Sell orders
 - **Partial Fills**: Orders can be partially filled across multiple trades
+- **Order Management**: Cancel and modify existing orders by ID
 - **Real-time Book State**: View bid/ask depth and spread
 - **Trade History**: Complete record of all executed trades
+- **Active Order Tracking**: Monitor all live orders in the book
 
 ## Project Structure
 
@@ -48,6 +50,7 @@ The order book maintains two sides:
 
 - **Bids**: `std::map<double, std::queue<OrderPtr>, std::greater<double>>`
 - **Asks**: `std::map<double, std::queue<OrderPtr>, std::less<double>>`
+- **Active Orders**: `std::unordered_map<uint64_t, OrderPtr>` for O(1) lookup
 - Price levels maintain FIFO queues for time priority
 
 ## Building
@@ -77,12 +80,18 @@ make
 int main() {
     MatchingEngine engine;
     
-    // Add limit orders
-    engine.submitLimitOrder(OrderSide::BUY, 100.00, 50);
-    engine.submitLimitOrder(OrderSide::SELL, 101.00, 60);
+    // Submit limit orders (returns order ID)
+    uint64_t order1 = engine.submitLimitOrder(OrderSide::BUY, 100.00, 50);
+    uint64_t order2 = engine.submitLimitOrder(OrderSide::SELL, 101.00, 60);
     
     // Submit market order
     engine.submitMarketOrder(OrderSide::BUY, 30);
+    
+    // Cancel an order
+    engine.cancelOrder(order1);
+    
+    // Modify an order (change price and/or quantity)
+    engine.modifyOrder(order2, 100.50, 75);
     
     // View order book
     engine.printBook();
@@ -93,41 +102,91 @@ int main() {
 }
 ```
 
+## New Features
+
+### Order Cancellation
+
+Cancel any active order by its ID:
+
+```cpp
+uint64_t order_id = engine.submitLimitOrder(OrderSide::BUY, 99.50, 100);
+// ... later
+bool success = engine.cancelOrder(order_id);
+```
+
+- Returns `true` if order was successfully canceled
+- Returns `false` if order not found or already filled
+- Removes order from book and active orders tracking
+
+### Order Modification
+
+Modify price and/or quantity of an existing order:
+
+```cpp
+uint64_t order_id = engine.submitLimitOrder(OrderSide::SELL, 101.00, 50);
+// ... later
+bool success = engine.modifyOrder(order_id, 100.75, 75);
+```
+
+- Cancels the original order and replaces it with new parameters
+- Maintains the same order ID and timestamp (preserves time priority)
+- Returns `true` if successful, `false` if order not found
+
 ## Sample Output
 
 ```
 ========== ORDER BOOK ==========
 ASKS (Sell Orders):
   102.00 | 100
-  101.50 | 50
-  101.00 | 30
+  101.00 | 60
 --------------------------------
-Spread: 2.00
+Spread: 1.00
+Active Orders: 5
 --------------------------------
 BIDS (Buy Orders):
+  100.50 | 75
   99.00 | 75
-  99.50 | 25
 ================================
 
+[CANCEL] Attempting to cancel order #2
+[SUCCESS] Order #2 has been canceled
+
+[MODIFY] Attempting to modify order #4 to 50@100.75
+[SUCCESS] Order #4 has been modified
+
 ========== TRADE HISTORY ==========
-Trade: Buy#7 <-> Sell#4 | 60@101.00
-Trade: Buy#7 <-> Sell#5 | 30@101.50
-Trade: Buy#10 <-> Sell#5 | 50@101.50
-Trade: Buy#11 <-> Sell#8 | 120@99.75
+Trade: Buy#7 <-> Sell#4 | 40@100.75
 ===================================
 ```
 
 ## Performance Characteristics
 
 - **Order Submission**: O(log N) where N is the number of price levels
+- **Order Cancellation**: O(M) where M is orders at that price level
+- **Order Modification**: O(M + log N) (cancel + reinsert)
 - **Matching**: O(M) where M is the number of orders matched
 - **Book Lookup**: O(1) for best bid/ask
+- **Order Lookup**: O(1) via unordered_map
 - **Space**: O(N) for number of active orders
+
+## API Reference
+
+### MatchingEngine Methods
+
+| Method | Description | Returns |
+|--------|-------------|----------|
+| `submitLimitOrder(side, price, qty)` | Submit a limit order | `uint64_t` order ID |
+| `submitMarketOrder(side, qty)` | Submit a market order | `void` |
+| `cancelOrder(order_id)` | Cancel an active order | `bool` success |
+| `modifyOrder(order_id, price, qty)` | Modify existing order | `bool` success |
+| `printBook()` | Display current order book | `void` |
+| `printTrades()` | Show trade history | `void` |
+| `printStats()` | Display statistics | `void` |
 
 ## Future Enhancements
 
-- [ ] Order cancellation by ID
-- [ ] Order modification
+- [x] Order cancellation by ID
+- [x] Order modification
 - [ ] Iceberg orders (hidden quantity)
 - [ ] Stop-loss orders
 - [ ] Market depth visualization
