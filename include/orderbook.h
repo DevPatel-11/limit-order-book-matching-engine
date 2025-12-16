@@ -1,1 +1,56 @@
-// placeholder
+#pragma once
+
+#include "order.h"
+#include <deque>
+#include <functional>
+#include <map>
+#include <memory>
+#include <unordered_map>
+#include <vector>
+
+struct Trade {
+    uint64_t trade_id;
+    uint64_t buy_order_id;
+    uint64_t sell_order_id;
+    int64_t  price;
+    uint64_t quantity;
+    int64_t  timestamp_us;
+};
+
+using OrderPtr = std::shared_ptr<Order>;
+
+class OrderBook {
+public:
+    OrderBook() = default;
+    OrderBook(const OrderBook&)            = delete;
+    OrderBook& operator=(const OrderBook&) = delete;
+
+    std::vector<Trade> match(OrderPtr order);
+
+    int64_t bestBid()     const;
+    int64_t bestAsk()     const;
+    int64_t spread()      const;
+    size_t  bidLevels()   const;
+    size_t  askLevels()   const;
+    size_t  activeOrders() const;
+
+    const std::vector<Trade>& tradeHistory() const { return trades_; }
+
+    void printBook(int levels = 5) const;
+    void printTrades()             const;
+
+private:
+    using Level = std::deque<OrderPtr>;
+
+    std::map<int64_t, Level, std::greater<int64_t>> bids_;
+    std::map<int64_t, Level>                        asks_;
+    std::unordered_map<uint64_t, OrderPtr>          active_;
+    std::vector<Trade>                              trades_;
+    uint64_t                                        next_trade_id_{1};
+
+    void               addToBook(OrderPtr order);
+    Trade              makeTrade(uint64_t buy_id, uint64_t sell_id,
+                                 int64_t price, uint64_t qty, int64_t ts);
+    std::vector<Trade> matchBuy(OrderPtr order);
+    std::vector<Trade> matchSell(OrderPtr order);
+};
