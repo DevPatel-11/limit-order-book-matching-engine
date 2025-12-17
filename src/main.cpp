@@ -1,18 +1,93 @@
 #include "matching_engine.h"
 #include <iostream>
+#include <thread>
+#include <vector>
+#include <chrono>
 
-void runDemo() {
+void runSingleThreadDemo() {
+    MatchingEngine engine;
+    
+    std::cout << "\n" << std::string(50, '=') << std::endl;
+    std::cout << "  SINGLE-THREADED DEMO" << std::endl;
+    std::cout << std::string(50, '=') << "\n" << std::endl;
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    for (int i = 0; i < 100; i++) {
+        engine.submitLimitOrder(OrderSide::BUY, 100.0 - i * 0.1, 10);
+        engine.submitLimitOrder(OrderSide::SELL, 101.0 + i * 0.1, 10);
+    }
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    
+    std::cout << "\nSingle-threaded: 200 orders in " << duration.count() << "ms" << std::endl;
+    engine.printStats();
+}
+
+void submitBuyOrders(MatchingEngine& engine, int count, int thread_id) {
+    for (int i = 0; i < count; i++) {
+        double price = 100.0 - (thread_id * 10 + i) * 0.1;
+        engine.submitLimitOrder(OrderSide::BUY, price, 10);
+    }
+}
+
+void submitSellOrders(MatchingEngine& engine, int count, int thread_id) {
+    for (int i = 0; i < count; i++) {
+        double price = 101.0 + (thread_id * 10 + i) * 0.1;
+        engine.submitLimitOrder(OrderSide::SELL, price, 10);
+    }
+}
+
+void runMultiThreadDemo() {
+    MatchingEngine engine;
+    
+    std::cout << "\n" << std::string(50, '=') << std::endl;
+    std::cout << "  MULTI-THREADED DEMO" << std::endl;
+    std::cout << "  4 Threads Submitting Orders Concurrently" << std::endl;
+    std::cout << std::string(50, '=') << "\n" << std::endl;
+    
+    const int NUM_THREADS = 4;
+    const int ORDERS_PER_THREAD = 25;
+    
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    std::vector<std::thread> threads;
+    
+    // Launch buy order threads
+    for (int i = 0; i < NUM_THREADS / 2; i++) {
+        threads.emplace_back(submitBuyOrders, std::ref(engine), ORDERS_PER_THREAD, i);
+    }
+    
+    // Launch sell order threads
+    for (int i = 0; i < NUM_THREADS / 2; i++) {
+        threads.emplace_back(submitSellOrders, std::ref(engine), ORDERS_PER_THREAD, i);
+    }
+    
+    // Wait for all threads to complete
+    for (auto& t : threads) {
+        t.join();
+    }
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    
+    std::cout << "\nMulti-threaded: 100 orders across " << NUM_THREADS 
+              << " threads in " << duration.count() << "ms" << std::endl;
+    engine.printStats();
+    engine.printPoolStats();
+}
+
+void runFullDemo() {
     MatchingEngine engine;
     
     std::cout << "\n" << std::string(50, '=') << std::endl;
     std::cout << "  LIMIT ORDER BOOK & MATCHING ENGINE DEMO" << std::endl;
-    std::cout << "  With Memory Pool Optimization" << std::endl;
+    std::cout << "  With Memory Pool & Multi-Threading" << std::endl;
     std::cout << std::string(50, '=') << "\n" << std::endl;
     
-    // Show initial pool stats
     engine.printPoolStats();
     
-    // Phase 1: Build the order book
     std::cout << "\n>>> Phase 1: Building Order Book\n" << std::endl;
     
     uint64_t order1 = engine.submitLimitOrder(OrderSide::BUY, 100.00, 50);
@@ -25,57 +100,46 @@ void runDemo() {
     
     engine.printBook();
     engine.printStats();
-    engine.printPoolStats();
     
-    // Phase 2: Test order cancellation
-    std::cout << "\n>>> Phase 2: Testing Order Cancellation\n" << std::endl;
+    std::cout << "\n>>> Phase 2: Multi-threaded Order Submission\n" << std::endl;
     
-    engine.cancelOrder(order2);
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    std::thread t1([&]() {
+        for (int i = 0; i < 10; i++) {
+            engine.submitLimitOrder(OrderSide::BUY, 98.5 - i * 0.1, 5);
+        }
+    });
+    
+    std::thread t2([&]() {
+        for (int i = 0; i < 10; i++) {
+            engine.submitLimitOrder(OrderSide::SELL, 102.5 + i * 0.1, 5);
+        }
+    });
+    
+    t1.join();
+    t2.join();
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    
+    std::cout << "20 concurrent orders processed in " << duration.count() << " microseconds" << std::endl;
+    
     engine.printBook();
-    
-    engine.cancelOrder(order2);  // Try again
-    
-    engine.cancelOrder(order5);
-    engine.printBook();
-    engine.printPoolStats();
-    
-    // Phase 3: Test order modification
-    std::cout << "\n>>> Phase 3: Testing Order Modification\n" << std::endl;
-    
-    engine.modifyOrder(order1, 100.50, 75);
-    engine.printBook();
-    
-    engine.modifyOrder(order4, 100.75, 50);
-    engine.printBook();
-    engine.printStats();
-    
-    // Phase 4: Matching after modifications
-    std::cout << "\n>>> Phase 4: Matching After Modifications\n" << std::endl;
-    
-    engine.submitLimitOrder(OrderSide::BUY, 101.00, 40);
-    engine.printBook();
-    
-    // Phase 5: Market orders
-    std::cout << "\n>>> Phase 5: Market Orders\n" << std::endl;
-    
-    engine.submitMarketOrder(OrderSide::BUY, 30);
-    engine.printBook();
-    
-    engine.submitMarketOrder(OrderSide::SELL, 20);
-    engine.printBook();
-    
-    // Final state
-    engine.printTrades();
     engine.printStats();
     engine.printPoolStats();
     
     std::cout << "\n" << std::string(50, '=') << std::endl;
     std::cout << "  Demo Complete" << std::endl;
-    std::cout << "  Memory Pool reduced heap allocations!" << std::endl;
+    std::cout << "  Thread-safe matching engine!" << std::endl;
     std::cout << std::string(50, '=') << "\n" << std::endl;
 }
 
 int main() {
-    runDemo();
+    runFullDemo();
+    std::cout << "\n\n";
+    runSingleThreadDemo();
+    std::cout << "\n\n";
+    runMultiThreadDemo();
     return 0;
 }

@@ -5,7 +5,7 @@
 #include <algorithm>
 
 void OrderBook::addOrder(OrderPtr order) {
-    // Add to active orders tracking
+    // No lock here - caller must hold lock
     active_orders[order->getOrderId()] = order;
     
     if (order->getSide() == OrderSide::BUY) {
@@ -16,17 +16,15 @@ void OrderBook::addOrder(OrderPtr order) {
 }
 
 std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
-    std::vector<Trade> trades;
+    std::unique_lock<std::shared_mutex> lock(book_mutex);
     
-    // Add to active orders before matching
+    std::vector<Trade> trades;
     active_orders[incoming_order->getOrderId()] = incoming_order;
     
     if (incoming_order->getSide() == OrderSide::BUY) {
-        // Match buy order against asks (sell side)
         while (!incoming_order->isFilled() && !asks.empty()) {
             auto& [best_ask_price, ask_queue] = *asks.begin();
             
-            // For limit orders, check price compatibility
             if (incoming_order->getType() == OrderType::LIMIT_BUY && 
                 best_ask_price > incoming_order->getPrice()) {
                 break;
@@ -63,11 +61,9 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
             }
         }
     } else {
-        // Match sell order against bids (buy side)
         while (!incoming_order->isFilled() && !bids.empty()) {
             auto& [best_bid_price, bid_queue] = *bids.begin();
             
-            // For limit orders, check price compatibility
             if (incoming_order->getType() == OrderType::LIMIT_SELL && 
                 best_bid_price < incoming_order->getPrice()) {
                 break;
@@ -105,13 +101,11 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
         }
     }
     
-    // If order is not fully filled and it's a limit order, add to book
     if (!incoming_order->isFilled() && 
         (incoming_order->getType() == OrderType::LIMIT_BUY || 
          incoming_order->getType() == OrderType::LIMIT_SELL)) {
         addOrder(incoming_order);
     } else if (incoming_order->isFilled()) {
-        // Remove from active orders if fully filled
         active_orders.erase(incoming_order->getOrderId());
     }
     
@@ -119,17 +113,17 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
 }
 
 bool OrderBook::cancelOrder(uint64_t order_id) {
-    // Check if order exists in active orders
+    std::unique_lock<std::shared_mutex> lock(book_mutex);
+    
     auto it = active_orders.find(order_id);
     if (it == active_orders.end()) {
-        return false; // Order not found or already filled
+        return false;
     }
     
     OrderPtr order = it->second;
     double price = order->getPrice();
     OrderSide side = order->getSide();
     
-    // Remove from the appropriate price level queue
     auto removeFromQueue = [&](std::queue<OrderPtr>& q) -> bool {
         std::queue<OrderPtr> temp_queue;
         bool found = false;
@@ -140,13 +134,11 @@ bool OrderBook::cancelOrder(uint64_t order_id) {
             
             if (front_order->getOrderId() == order_id) {
                 found = true;
-                // Don't add it back to temp queue
             } else {
                 temp_queue.push(front_order);
             }
         }
         
-        // Restore the queue without the canceled order
         while (!temp_queue.empty()) {
             q.push(temp_queue.front());
             temp_queue.pop();
@@ -183,7 +175,8 @@ bool OrderBook::cancelOrder(uint64_t order_id) {
 }
 
 bool OrderBook::modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity) {
-    // Check if order exists
+    std::unique_lock<std::shared_mutex> lock(book_mutex);
+    
     auto it = active_orders.find(order_id);
     if (it == active_orders.end()) {
         return false;
@@ -191,12 +184,13 @@ bool OrderBook::modifyOrder(uint64_t order_id, double new_price, uint64_t new_qu
     
     OrderPtr old_order = it->second;
     
-    // Cancel the old order
+    // Temporarily unlock to call cancelOrder which will reacquire
+    lock.unlock();
     if (!cancelOrder(order_id)) {
         return false;
     }
+    lock.lock();
     
-    // Create a new order with updated parameters but same ID and timestamp
     OrderPtr new_order = std::make_shared<Order>(
         old_order->getOrderId(),
         old_order->getTimestamp(),
@@ -206,28 +200,31 @@ bool OrderBook::modifyOrder(uint64_t order_id, double new_price, uint64_t new_qu
         old_order->getSide()
     );
     
-    // Add the modified order back to the book
     addOrder(new_order);
-    
     return true;
 }
 
 double OrderBook::getBestBid() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
     if (bids.empty()) return 0.0;
     return bids.begin()->first;
 }
 
 double OrderBook::getBestAsk() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
     if (asks.empty()) return std::numeric_limits<double>::max();
     return asks.begin()->first;
 }
 
 double OrderBook::getSpread() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
     if (bids.empty() || asks.empty()) return 0.0;
     return getBestAsk() - getBestBid();
 }
 
 void OrderBook::printBook() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
+    
     std::cout << "\n========== ORDER BOOK ==========" << std::endl;
     std::cout << "ASKS (Sell Orders):" << std::endl;
     
@@ -269,6 +266,8 @@ void OrderBook::printBook() const {
 }
 
 void OrderBook::printTrades() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
+    
     std::cout << "\n========== TRADE HISTORY ==========" << std::endl;
     for (const auto& trade : trade_history) {
         std::cout << "Trade: Buy#" << trade.buy_order_id 
@@ -281,9 +280,16 @@ void OrderBook::printTrades() const {
 }
 
 size_t OrderBook::getBidDepth() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
     return bids.size();
 }
 
 size_t OrderBook::getAskDepth() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
     return asks.size();
+}
+
+size_t OrderBook::getActiveOrderCount() const {
+    std::shared_lock<std::shared_mutex> lock(book_mutex);
+    return active_orders.size();
 }

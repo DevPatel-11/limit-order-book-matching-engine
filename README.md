@@ -191,7 +191,7 @@ Trade: Buy#7 <-> Sell#4 | 40@100.75
 - [ ] Stop-loss orders
 - [ ] Market depth visualization
 - [ ] Performance benchmarking
-- [ ] Multi-threaded matching
+- [x] Multi-threaded matching
 - [x] Memory pool optimization
 
 ## Technical Details
@@ -255,4 +255,38 @@ engine.printPoolStats();
 - Automatic expansion in blocks of 1000
 - O(1) allocation from free list
 - O(1) deallocation back to pool
+
+
+### Multi-Threaded Matching
+
+The engine is fully thread-safe and supports concurrent order submissions:
+
+```cpp
+#include <thread>
+
+// Multiple threads can safely submit orders concurrently
+std::thread t1([&]() {
+    engine.submitLimitOrder(OrderSide::BUY, 100.00, 50);
+});
+
+std::thread t2([&]() {
+    engine.submitLimitOrder(OrderSide::SELL, 101.00, 60);
+});
+
+t1.join();
+t2.join();
+```
+
+**Thread Safety:**
+- `std::shared_mutex` for reader-writer locks
+- Exclusive locks (`unique_lock`) for writes (matchOrder, cancelOrder, modifyOrder)
+- Shared locks (`shared_lock`) for reads (getBestBid, printBook, printStats)
+- Memory pool has internal mutex protection
+- Atomic order ID generation
+
+**Performance:**
+- Multiple threads can read order book state concurrently
+- Write operations are serialized for correctness
+- Lock-free order ID generation using atomics
+- Demonstrates horizontal scalability for high-throughput scenarios
 

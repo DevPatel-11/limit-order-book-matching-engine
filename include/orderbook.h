@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <mutex>
+#include <shared_mutex>
 
 using OrderPtr = std::shared_ptr<Order>;
 
@@ -31,6 +33,9 @@ private:
     
     std::vector<Trade> trade_history;
     
+    // Thread safety
+    mutable std::shared_mutex book_mutex;
+    
 public:
     OrderBook() = default;
     
@@ -50,7 +55,7 @@ public:
     
     size_t getBidDepth() const;
     size_t getAskDepth() const;
-    size_t getActiveOrderCount() const { return active_orders.size(); }
+    size_t getActiveOrderCount() const;
 };
 
 #endif
