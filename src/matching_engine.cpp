@@ -1,7 +1,7 @@
 #include "matching_engine.h"
 #include <iostream>
 
-MatchingEngine::MatchingEngine() : order_id_counter(1) {}
+MatchingEngine::MatchingEngine() : order_id_counter(1), order_pool(1000) {}
 
 uint64_t MatchingEngine::getCurrentTimestamp() const {
     return std::chrono::duration_cast<std::chrono::microseconds>(
@@ -17,7 +17,9 @@ uint64_t MatchingEngine::submitLimitOrder(OrderSide side, double price, uint64_t
     OrderType type = (side == OrderSide::BUY) ? OrderType::LIMIT_BUY : OrderType::LIMIT_SELL;
     
     uint64_t order_id = generateOrderId();
-    auto order = std::make_shared<Order>(
+    
+    // Allocate order from memory pool
+    Order* raw_order = order_pool.allocate(
         order_id,
         getCurrentTimestamp(),
         price,
@@ -25,6 +27,9 @@ uint64_t MatchingEngine::submitLimitOrder(OrderSide side, double price, uint64_t
         type,
         side
     );
+    
+    // Create shared_ptr with custom deleter
+    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
     
     std::cout << "\n[SUBMIT] ";
     order->print();
@@ -44,8 +49,8 @@ uint64_t MatchingEngine::submitLimitOrder(OrderSide side, double price, uint64_t
 void MatchingEngine::submitMarketOrder(OrderSide side, uint64_t quantity) {
     OrderType type = (side == OrderSide::BUY) ? OrderType::MARKET_BUY : OrderType::MARKET_SELL;
     
-    // Market orders use price 0 as placeholder
-    auto order = std::make_shared<Order>(
+    // Allocate order from memory pool
+    Order* raw_order = order_pool.allocate(
         generateOrderId(),
         getCurrentTimestamp(),
         0.0,
@@ -53,6 +58,9 @@ void MatchingEngine::submitMarketOrder(OrderSide side, uint64_t quantity) {
         type,
         side
     );
+    
+    // Create shared_ptr with custom deleter
+    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
     
     std::cout << "\n[SUBMIT MARKET] ";
     order->print();
@@ -112,4 +120,12 @@ void MatchingEngine::printStats() const {
     std::cout << "Ask Depth: " << orderbook.getAskDepth() << " levels" << std::endl;
     std::cout << "Active Orders: " << orderbook.getActiveOrderCount() << std::endl;
     std::cout << "================================\n" << std::endl;
+}
+
+void MatchingEngine::printPoolStats() const {
+    std::cout << "\n========== MEMORY POOL STATS ==========" << std::endl;
+    std::cout << "Total Capacity: " << order_pool.getTotalCapacity() << " orders" << std::endl;
+    std::cout << "Free Slots: " << order_pool.getFreeCount() << " orders" << std::endl;
+    std::cout << "In Use: " << (order_pool.getTotalCapacity() - order_pool.getFreeCount()) << " orders" << std::endl;
+    std::cout << "=======================================\n" << std::endl;
 }

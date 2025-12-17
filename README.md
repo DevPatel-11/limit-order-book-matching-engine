@@ -192,7 +192,7 @@ Trade: Buy#7 <-> Sell#4 | 40@100.75
 - [ ] Market depth visualization
 - [ ] Performance benchmarking
 - [ ] Multi-threaded matching
-- [ ] Memory pool optimization
+- [x] Memory pool optimization
 
 ## Technical Details
 
@@ -227,3 +227,32 @@ MIT License
 ## Author
 
 Built for learning market microstructure and exchange systems.
+
+### Memory Pool Optimization
+
+The engine uses a custom memory pool for Order objects to minimize heap allocations:
+
+```cpp
+// Memory pool is automatically initialized
+MatchingEngine engine;  // Creates pool with 1000 pre-allocated slots
+
+// Orders are allocated from the pool
+uint64_t order_id = engine.submitLimitOrder(OrderSide::BUY, 100.00, 50);
+
+// View memory pool statistics
+engine.printPoolStats();
+```
+
+**Benefits:**
+- Reduces memory fragmentation
+- Faster allocation/deallocation (no system calls)
+- Thread-safe with mutex protection
+- Automatic growth when pool is exhausted
+- Custom deleter integrates with shared_ptr
+
+**Performance:**
+- Initial capacity: 1000 orders
+- Automatic expansion in blocks of 1000
+- O(1) allocation from free list
+- O(1) deallocation back to pool
+
