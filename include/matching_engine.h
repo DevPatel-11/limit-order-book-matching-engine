@@ -21,6 +21,9 @@ public:
     uint64_t submitLimitOrder(OrderSide side, double price, uint64_t quantity);
     void submitMarketOrder(OrderSide side, uint64_t quantity);
     
+    // Iceberg order
+    uint64_t submitIcebergOrder(OrderSide side, double price, uint64_t total_quantity, uint64_t display_quantity);
+    
     // Order management methods
     bool cancelOrder(uint64_t order_id);
     bool modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity);

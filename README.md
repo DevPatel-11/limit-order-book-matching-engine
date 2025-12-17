@@ -183,7 +183,8 @@ Trade: Buy#7 <-> Sell#4 | 40@100.75
 | `printTrades()` | Show trade history | `void` |
 | `printStats()` | Display statistics | `void` |
 
-## Future Enhancements
+## Future Enhancementsls -la orderbook
+
 
 - [x] Order cancellation by ID
 - [x] Order modification

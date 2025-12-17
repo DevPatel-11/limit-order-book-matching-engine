@@ -43,6 +43,10 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
                 
                 Trade trade;
                 trade.buy_order_id = incoming_order->getOrderId();
+                // Handle iceberg order replenishment
+                if (match_order->isIceberg() && match_order->getVisibleQuantity() == 0 && !match_order->isFilled()) {
+                    match_order->replenishDisplay();
+                }
                 trade.sell_order_id = match_order->getOrderId();
                 trade.price = best_ask_price;
                 trade.quantity = trade_qty;
@@ -83,6 +87,10 @@ std::vector<Trade> OrderBook::matchOrder(OrderPtr incoming_order) {
                 Trade trade;
                 trade.buy_order_id = match_order->getOrderId();
                 trade.sell_order_id = incoming_order->getOrderId();
+                // Handle iceberg order replenishment
+                if (match_order->isIceberg() && match_order->getVisibleQuantity() == 0 && !match_order->isFilled()) {
+                    match_order->replenishDisplay();
+                }
                 trade.price = best_bid_price;
                 trade.quantity = trade_qty;
                 trade.timestamp = incoming_order->getTimestamp();

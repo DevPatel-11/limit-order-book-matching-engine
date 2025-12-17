@@ -129,3 +129,38 @@ void MatchingEngine::printPoolStats() const {
     std::cout << "In Use: " << (order_pool.getTotalCapacity() - order_pool.getFreeCount()) << " orders" << std::endl;
     std::cout << "=======================================\n" << std::endl;
 }
+
+uint64_t MatchingEngine::submitIcebergOrder(OrderSide side, double price, uint64_t total_quantity, uint64_t display_quantity) {
+    OrderType type = (side == OrderSide::BUY) ? OrderType::ICEBERG_BUY : OrderType::ICEBERG_SELL;
+    
+    uint64_t order_id = generateOrderId();
+    
+    // Allocate order from memory pool with iceberg constructor
+    Order* raw_order = order_pool.allocate(
+        order_id,
+        getCurrentTimestamp(),
+        price,
+        total_quantity,
+        type,
+        side,
+        display_quantity
+    );
+    
+    // Create shared_ptr with custom deleter
+    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
+    
+    std::cout << "\n[SUBMIT ICEBERG] ";
+    order->print();
+    std::cout << "  Visible: " << display_quantity << ", Hidden: " << (total_quantity - display_quantity) << std::endl;
+    
+    auto trades = orderbook.matchOrder(order);
+    
+    if (!trades.empty()) {
+        std::cout << "[MATCHED] " << trades.size() << " trade(s) executed\n";
+        for (const auto& trade : trades) {
+            std::cout << "  -> " << trade.quantity << "@" << trade.price << std::endl;
+        }
+    }
+    
+    return order_id;
+}

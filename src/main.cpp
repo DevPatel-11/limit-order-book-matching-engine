@@ -126,6 +126,20 @@ void runFullDemo() {
     std::cout << "20 concurrent orders processed in " << duration.count() << " microseconds" << std::endl;
     
     engine.printBook();
+    // Test 6: Iceberg Order Demo
+    std::cout << "\n\n=== Test 6: Iceberg Orders (Hidden Quantity) ===" << std::endl;
+    std::cout << "Submitting iceberg buy order: 1000 total qty, 200 visible at $99.50" << std::endl;
+    uint64_t iceberg_id = engine.submitIcebergOrder(OrderSide::BUY, 99.50, 1000, 200);
+    
+    std::cout << "\nSubmitting 3 sell orders (150 qty each) at $99.50 to match against iceberg:" << std::endl;
+    engine.submitLimitOrder(OrderSide::SELL, 99.50, 150); // Will partially fill iceberg display
+    engine.submitLimitOrder(OrderSide::SELL, 99.50, 150); // Will fully fill display, trigger replenish
+    engine.submitLimitOrder(OrderSide::SELL, 99.50, 150); // Will match against replenished display
+    
+    std::cout << "\n📊 Orderbook State (after iceberg partial fills):" << std::endl;
+    engine.printBook();
+    std::cout << "\n💹 Trade Statistics:" << std::endl;
+
     engine.printStats();
     engine.printPoolStats();
     
