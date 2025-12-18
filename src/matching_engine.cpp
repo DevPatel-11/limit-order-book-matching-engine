@@ -197,3 +197,7 @@ uint64_t MatchingEngine::submitStopLossOrder(OrderSide side, double trigger_pric
     
     return order_id;
 }
+
+void MatchingEngine::printDepth(int levels) const {
+    orderbook.printDepth(levels);
+}

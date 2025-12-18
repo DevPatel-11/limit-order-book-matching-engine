@@ -152,6 +152,11 @@ void runFullDemo() {
     std::cout << "\n📊 Orderbook State (with stop-loss pending):" << std::endl;
     engine.printBook();
     std::cout << "\n" << std::string(50, '=') << std::endl;
+
+    // Test 8: Market Depth Visualization
+    std::cout << "\n\n=== Test 8: Market Depth Visualization ===" << std::endl;
+    std::cout << "Displaying cumulative volume at each price level:" << std::endl;
+    engine.printDepth(5);  // Show top 5 levels
     std::cout << "  Demo Complete" << std::endl;
     std::cout << "  Thread-safe matching engine!" << std::endl;
     std::cout << std::string(50, '=') << "\n" << std::endl;

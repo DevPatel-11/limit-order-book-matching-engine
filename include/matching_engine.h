@@ -33,6 +33,7 @@ public:
     void printTrades() const;
     void printStats() const;
     void printPoolStats() const;
+    void printDepth(int levels = 5) const;  // Display market depth visualization
 };
 
 #endif

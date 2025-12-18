@@ -3,6 +3,8 @@
 #include <iomanip>
 #include <limits>
 #include <algorithm>
+#include <vector>
+#include <tuple>
 
 void OrderBook::addOrder(OrderPtr order) {
     // No lock here - caller must hold lock
@@ -300,4 +302,76 @@ size_t OrderBook::getAskDepth() const {
 size_t OrderBook::getActiveOrderCount() const {
     std::shared_lock<std::shared_mutex> lock(book_mutex);
     return active_orders.size();
+}
+
+
+void OrderBook::printDepth(int levels) const {
+    std::cout << "\n=== Market Depth (Top " << levels << " Levels) ===" << std::endl;
+    std::cout << "\n📊 ASK SIDE (Sell Orders - Ascending)" << std::endl;
+    std::cout << std::setw(12) << "Price" << std::setw(15) << "Quantity" 
+              << std::setw(18) << "Cumulative" << std::endl;
+    std::cout << std::string(45, '-') << std::endl;
+    
+    // Collect ask levels (stored in ascending order)
+    std::vector<std::tuple<double, uint64_t, uint64_t>> ask_levels;
+    uint64_t cumulative_asks = 0;
+    int count = 0;
+    
+    for (const auto& [price, order_queue] : asks) {
+        if (count >= levels) break;
+        // Calculate total quantity at this price level
+        std::queue<OrderPtr> temp_queue = order_queue;  // Copy to iterate
+        uint64_t level_qty = 0;
+        while (!temp_queue.empty()) {
+            level_qty += temp_queue.front()->getRemainingQuantity();
+            temp_queue.pop();
+        }
+        cumulative_asks += level_qty;
+        ask_levels.push_back({price, level_qty, cumulative_asks});
+        count++;
+    }
+    
+    // Print asks in reverse (highest to lowest for visual depth chart)
+    for (auto it = ask_levels.rbegin(); it != ask_levels.rend(); ++it) {
+        std::cout << std::fixed << std::setprecision(2)
+                  << std::setw(12) << std::get<0>(*it)
+                  << std::setw(15) << std::get<1>(*it)
+                  << std::setw(18) << std::get<2>(*it) << std::endl;
+    }
+    
+    // Spread indicator
+    if (!asks.empty() && !bids.empty()) {
+        double spread = asks.begin()->first - bids.begin()->first;
+        std::cout << "\n" << std::string(45, '=') << std::endl;
+        std::cout << "   📈 SPREAD: $" << std::fixed << std::setprecision(2) << spread << std::endl;
+        std::cout << std::string(45, '=') << std::endl;
+    }
+    
+    std::cout << "\n📊 BID SIDE (Buy Orders - Descending)" << std::endl;
+    std::cout << std::setw(12) << "Price" << std::setw(15) << "Quantity" 
+              << std::setw(18) << "Cumulative" << std::endl;
+    std::cout << std::string(45, '-') << std::endl;
+    
+    // Print bids with cumulative volume
+    uint64_t cumulative_bids = 0;
+    count = 0;
+    
+    for (const auto& [price, order_queue] : bids) {
+        if (count >= levels) break;
+        // Calculate total quantity at this price level
+        std::queue<OrderPtr> temp_queue = order_queue;  // Copy to iterate
+        uint64_t level_qty = 0;
+        while (!temp_queue.empty()) {
+            level_qty += temp_queue.front()->getRemainingQuantity();
+            temp_queue.pop();
+        }
+        cumulative_bids += level_qty;
+        std::cout << std::fixed << std::setprecision(2)
+                  << std::setw(12) << price
+                  << std::setw(15) << level_qty
+                  << std::setw(18) << cumulative_bids << std::endl;
+        count++;
+    }
+    
+    std::cout << "\n" << std::string(45, '=') << std::endl;
 }

@@ -183,14 +183,13 @@ Trade: Buy#7 <-> Sell#4 | 40@100.75
 | `printTrades()` | Show trade history | `void` |
 | `printStats()` | Display statistics | `void` |
 
-## Future Enhancementsls -la orderbook
+## Future Enhancements
 
 
 - [x] Order cancellation by ID
 - [x] Order modification
-- [ ] Iceberg orders (hidden quantity)
-- Stop-loss orders
-- [ ] Stop-loss orders
+- [x] Iceberg orders (hidden quantity)
+- [x] Stop-loss orders
 - [ ] Market depth visualization
 - [ ] Performance benchmarking
 - [x] Multi-threaded matching

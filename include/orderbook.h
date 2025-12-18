@@ -52,6 +52,7 @@ public:
     
     void printBook() const;
     void printTrades() const;
+    void printDepth(int levels = 5) const;  // Display market depth
     
     size_t getBidDepth() const;
     size_t getAskDepth() const;
