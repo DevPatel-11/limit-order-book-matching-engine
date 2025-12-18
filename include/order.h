@@ -10,7 +10,9 @@ enum class OrderType {
     MARKET_BUY,
     MARKET_SELL,
     ICEBERG_BUY,
-    ICEBERG_SELL
+    ICEBERG_SELL,
+    STOP_LOSS_BUY,
+    STOP_LOSS_SELL
 };
 
 enum class OrderSide {
@@ -33,6 +35,11 @@ private:
     uint64_t display_quantity;  // Visible portion
     uint64_t hidden_quantity;   // Hidden portion
 
+    // Stop-loss order fields
+    bool is_stop_loss;
+    double trigger_price;  // Price that triggers the stop-loss
+    bool is_triggered;     // Whether stop-loss has been triggered
+
 public:
     Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s);
     
@@ -41,6 +48,10 @@ public:
           uint64_t display_qty);
     
     // Getters
+
+    // Stop-loss constructor
+    Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s,
+          double trigger_p);
     uint64_t getOrderId() const { return order_id; }
     uint64_t getTimestamp() const { return timestamp; }
     double getPrice() const { return price; }
@@ -59,6 +70,12 @@ public:
     void fill(uint64_t qty);
     bool isFilled() const { return remaining_quantity == 0; }
     void replenishDisplay();  // Show more quantity from hidden portion
+
+    // Stop-loss methods
+    bool isStopLoss() const { return is_stop_loss; }
+    double getTriggerPrice() const { return trigger_price; }
+    bool isTriggered() const { return is_triggered; }
+    void trigger() { is_triggered = true; }  // Mark stop-loss as triggered
     
     // Display
     void print() const;

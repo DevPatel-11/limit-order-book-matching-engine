@@ -143,6 +143,14 @@ void runFullDemo() {
     engine.printStats();
     engine.printPoolStats();
     
+
+    // Test 7: Stop-Loss Orders
+    std::cout << "\n\n=== Test 7: Stop-Loss Orders ===" << std::endl;
+    std::cout << "Submitting stop-loss sell order: trigger at $98, limit at $97.50, 100 qty" << std::endl;
+    uint64_t stoploss_id = engine.submitStopLossOrder(OrderSide::SELL, 98.0, 97.50, 100);
+    
+    std::cout << "\n📊 Orderbook State (with stop-loss pending):" << std::endl;
+    engine.printBook();
     std::cout << "\n" << std::string(50, '=') << std::endl;
     std::cout << "  Demo Complete" << std::endl;
     std::cout << "  Thread-safe matching engine!" << std::endl;

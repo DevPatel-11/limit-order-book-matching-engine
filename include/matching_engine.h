@@ -23,6 +23,7 @@ public:
     
     // Iceberg order
     uint64_t submitIcebergOrder(OrderSide side, double price, uint64_t total_quantity, uint64_t display_quantity);
+    uint64_t submitStopLossOrder(OrderSide side, double trigger_price, double limit_price, uint64_t quantity);
     
     // Order management methods
     bool cancelOrder(uint64_t order_id);

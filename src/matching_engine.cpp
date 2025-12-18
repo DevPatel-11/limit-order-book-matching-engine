@@ -164,3 +164,36 @@ uint64_t MatchingEngine::submitIcebergOrder(OrderSide side, double price, uint64
     
     return order_id;
 }
+
+uint64_t MatchingEngine::submitStopLossOrder(OrderSide side, double trigger_price, double limit_price, uint64_t quantity) {
+    OrderType type = (side == OrderSide::BUY) ? OrderType::STOP_LOSS_BUY : OrderType::STOP_LOSS_SELL;
+    
+    uint64_t order_id = generateOrderId();
+    
+    // Allocate order from memory pool with stop-loss constructor
+    Order* order = memory_pool.allocate();
+    
+    // Allocate raw order from memory pool
+    Order* raw_order = memory_pool.allocate();
+    new (raw_order) Order(order_id, std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::system_clock::now().time_since_epoch()).count(),
+                          limit_price, quantity, type, side, trigger_price);
+    
+    // Create shared_ptr with custom deleter
+    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&memory_pool));
+    
+    // Stop-loss orders are kept pending until triggered
+    std::cout << "\nStop-loss order submitted!" << std::endl;
+    std::cout << "  Order ID: " << order_id << std::endl;
+    std::cout << "  Side: " << (side == OrderSide::BUY ? "BUY" : "SELL") << std::endl;
+    std::cout << "  Trigger Price: " << trigger_price << std::endl;
+    std::cout << "  Limit Price: " << limit_price << std::endl;
+    std::cout << "  Quantity: " << quantity << std::endl;
+    std::cout << "  (Will activate when market reaches trigger price)" << std::endl;
+    
+    // For simplicity, add to orderbook immediately
+    // In a real system, would keep in separate pending list until triggered
+    orderbook.matchOrder(order);
+    
+    return order_id;
+}

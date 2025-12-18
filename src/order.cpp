@@ -76,3 +76,10 @@ void Order::print() const {
     
     std::cout << std::endl;
 }
+
+// Stop-loss constructor
+Order::Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s, double trigger_p)
+    : order_id(id), timestamp(ts), price(p), quantity(qty), remaining_quantity(qty),
+      type(t), side(s), is_iceberg(false), display_quantity(0), hidden_quantity(0),
+      is_stop_loss(true), trigger_price(trigger_p), is_triggered(false) {
+}
