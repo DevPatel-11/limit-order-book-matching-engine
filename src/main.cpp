@@ -2,39 +2,33 @@
 #include <iostream>
 
 int main() {
-    std::cout << "=== Limit Order Book Matching Engine — Feature 1 Demo ===\n\n";
-
     MatchingEngine engine;
 
-    // --- Passive limit orders (no crosses, build the book) ---
-    std::cout << "\n--- Passive limit buys ---\n";
-    engine.submitLimit(Side::BUY, 1000000, 100);   // $100.00 x 100
-    engine.submitLimit(Side::BUY,  995000, 200);   // $ 99.50 x 200
-    engine.submitLimit(Side::BUY,  990000, 150);   // $ 99.00 x 150
+    std::cout << "\n=== Phase 1: Build order book ===\n";
+    uint64_t id1 = engine.submitLimit(Side::BUY,  990000, 100);   // $99.00
+    uint64_t id2 = engine.submitLimit(Side::BUY,  995000,  50);   // $99.50
+               engine.submitLimit(Side::BUY,  998000,  75);   // $99.80
+    uint64_t id4 = engine.submitLimit(Side::SELL, 1010000, 60);   // $101.00
+               engine.submitLimit(Side::SELL, 1015000, 80);   // $101.50
+    engine.printBook();
 
-    std::cout << "\n--- Passive limit sells ---\n";
-    engine.submitLimit(Side::SELL, 1010000, 120);  // $101.00 x 120
-    engine.submitLimit(Side::SELL, 1015000,  80);  // $101.50 x  80
+    std::cout << "\n=== Phase 2: Cancel an order ===\n";
+    engine.cancelOrder(id1);   // cancel $99.00 buy
+    engine.printBook();
 
-    std::cout << "\n--- Book after passive orders ---\n";
-    engine.printBook(5);
+    std::cout << "\n=== Phase 3: Modify an order ===\n";
+    engine.modifyOrder(id4, 1005000, 40);  // move $101.00 sell to $100.50, reduce qty
+    engine.printBook();
 
-    // --- Aggressive limit buy: crosses the spread, sweeps ask levels ---
-    std::cout << "\n--- Aggressive limit buy @ $101.50 (sweeps $101.00 and $101.50) ---\n";
-    engine.submitLimit(Side::BUY, 1015000, 150);   // will consume 120 @101.00 + 30 @101.50
-
-    std::cout << "\n--- Book after aggressive limit ---\n";
-    engine.printBook(5);
-
-    // --- Market sell: hits best bids without a price ---
-    std::cout << "\n--- Market sell qty=250 ---\n";
-    engine.submitMarket(Side::SELL, 250);          // $100.00 x 100 then $99.50 x 150
-
-    // --- Final state ---
-    std::cout << "\n--- Final book state ---\n";
-    engine.printBook(5);
+    std::cout << "\n=== Phase 4: Aggressive order (crosses spread after modify) ===\n";
+    engine.submitLimit(Side::BUY, 1010000, 60);  // sweeps $100.50 ask
+    engine.printBook();
     engine.printTrades();
     engine.printStats();
 
+    std::cout << "\n=== Phase 5: Cancel already-filled order ===\n";
+    engine.cancelOrder(id2);   // still active — should cancel
+    engine.cancelOrder(999);   // non-existent — should report not found
+    engine.printBook();
     return 0;
 }

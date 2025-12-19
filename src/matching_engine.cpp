@@ -66,6 +66,22 @@ void MatchingEngine::submitMarket(Side side, uint64_t qty) {
     if (verbose_) logTrades(trades);
 }
 
+bool MatchingEngine::cancelOrder(uint64_t order_id) {
+    bool ok = book_.cancelOrder(order_id);
+    if (verbose_)
+        std::cout << "[CANCEL] #" << order_id
+                  << (ok ? " — cancelled\n" : " — not found\n");
+    return ok;
+}
+
+bool MatchingEngine::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_qty) {
+    bool ok = book_.modifyOrder(order_id, new_price, new_qty, nowUs());
+    if (verbose_)
+        std::cout << "[MODIFY] #" << order_id
+                  << (ok ? " — modified\n" : " — not found\n");
+    return ok;
+}
+
 void MatchingEngine::printBook(int levels) const { book_.printBook(levels); }
 void MatchingEngine::printTrades()          const { book_.printTrades();    }
 
