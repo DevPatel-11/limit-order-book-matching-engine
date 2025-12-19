@@ -27,6 +27,10 @@ public:
 
     std::vector<Trade> match(OrderPtr order);
 
+    bool cancelOrder(uint64_t order_id);
+    bool modifyOrder(uint64_t order_id, int64_t new_price,
+                     uint64_t new_qty, int64_t new_timestamp_us);
+
     int64_t bestBid()     const;
     int64_t bestAsk()     const;
     int64_t spread()      const;
@@ -49,6 +53,7 @@ private:
     uint64_t                                        next_trade_id_{1};
 
     void               addToBook(OrderPtr order);
+    bool               cancelLocked(uint64_t order_id);   // caller holds no public lock
     Trade              makeTrade(uint64_t buy_id, uint64_t sell_id,
                                  int64_t price, uint64_t qty, int64_t ts);
     std::vector<Trade> matchBuy(OrderPtr order);

@@ -12,6 +12,52 @@ void OrderBook::addToBook(OrderPtr order) {
     active_[order->id()] = order;
 }
 
+bool OrderBook::cancelLocked(uint64_t order_id) {
+    auto it = active_.find(order_id);
+    if (it == active_.end()) return false;
+
+    OrderPtr order = it->second;
+    int64_t  price = order->price();
+
+    auto removeFromLevel = [&](auto& side_map) {
+        auto map_it = side_map.find(price);
+        if (map_it == side_map.end()) return;
+        Level& level = map_it->second;
+        level.erase(std::remove_if(level.begin(), level.end(),
+            [order_id](const OrderPtr& o) { return o->id() == order_id; }),
+            level.end());
+        if (level.empty()) side_map.erase(map_it);
+    };
+
+    if (order->side() == Side::BUY) removeFromLevel(bids_);
+    else                            removeFromLevel(asks_);
+
+    order->cancel();
+    active_.erase(it);
+    return true;
+}
+
+bool OrderBook::cancelOrder(uint64_t order_id) {
+    return cancelLocked(order_id);
+}
+
+bool OrderBook::modifyOrder(uint64_t order_id, int64_t new_price,
+                            uint64_t new_qty, int64_t new_timestamp_us) {
+    auto it = active_.find(order_id);
+    if (it == active_.end()) return false;
+
+    OrderPtr old_order = it->second;
+    OrderPtr new_order = std::make_shared<Order>(
+        old_order->id(), new_timestamp_us,
+        old_order->side(), old_order->kind(),
+        new_price, new_qty
+    );
+
+    cancelLocked(order_id);   // safe: no re-entrant lock needed
+    addToBook(new_order);
+    return true;
+}
+
 Trade OrderBook::makeTrade(uint64_t buy_id, uint64_t sell_id,
                             int64_t price, uint64_t qty, int64_t ts) {
     return Trade{next_trade_id_++, buy_id, sell_id, price, qty, ts};
