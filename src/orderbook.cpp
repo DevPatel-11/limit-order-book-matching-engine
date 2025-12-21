@@ -184,7 +184,7 @@ bool OrderBook::cancelOrder(uint64_t order_id) {
     return false;
 }
 
-bool OrderBook::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity) {
+bool OrderBook::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity, uint64_t new_timestamp) {
     std::unique_lock<std::shared_mutex> lock(book_mutex);
     
     auto it = active_orders.find(order_id);

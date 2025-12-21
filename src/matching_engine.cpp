@@ -29,12 +29,12 @@ uint64_t MatchingEngine::submitLimitOrder(OrderSide side, int64_t price, uint64_
     );
     
     // Create shared_ptr with custom deleter
-    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
+    auto order_ptr = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
     
     std::cout << "\n[SUBMIT] ";
-    order->print();
+    order_ptr->print();
     
-    auto trades = orderbook.matchOrder(order);
+    auto trades = orderbook.matchOrder(order_ptr);
     
     if (!trades.empty()) {
         std::cout << "[MATCHED] " << trades.size() << " trade(s) executed\n";
@@ -60,12 +60,12 @@ void MatchingEngine::submitMarketOrder(OrderSide side, uint64_t quantity) {
     );
     
     // Create shared_ptr with custom deleter
-    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
+    auto order_ptr = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
     
     std::cout << "\n[SUBMIT MARKET] ";
-    order->print();
+    order_ptr->print();
     
-    auto trades = orderbook.matchOrder(order);
+    auto trades = orderbook.matchOrder(order_ptr);
     
     if (!trades.empty()) {
         std::cout << "[MATCHED] " << trades.size() << " trade(s) executed\n";
@@ -92,7 +92,7 @@ bool MatchingEngine::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t 
     std::cout << "\n[MODIFY] Attempting to modify order #" << order_id 
               << " to " << new_quantity << "@" << new_price << std::endl;
     
-    bool success = orderbook.modifyOrder(order_id, new_price, new_quantity);
+    bool success = orderbook.modifyOrder(order_id, new_price, new_quantity, getCurrentTimestamp());
     
     if (success) {
         std::cout << "[SUCCESS] Order #" << order_id << " has been modified" << std::endl;
@@ -147,13 +147,13 @@ uint64_t MatchingEngine::submitIcebergOrder(OrderSide side, int64_t price, uint6
     );
     
     // Create shared_ptr with custom deleter
-    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
+    auto order_ptr = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
     
     std::cout << "\n[SUBMIT ICEBERG] ";
-    order->print();
+    order_ptr->print();
     std::cout << "  Visible: " << display_quantity << ", Hidden: " << (total_quantity - display_quantity) << std::endl;
     
-    auto trades = orderbook.matchOrder(order);
+    auto trades = orderbook.matchOrder(order_ptr);
     
     if (!trades.empty()) {
         std::cout << "[MATCHED] " << trades.size() << " trade(s) executed\n";
@@ -171,16 +171,16 @@ uint64_t MatchingEngine::submitStopLossOrder(OrderSide side, int64_t trigger_pri
     uint64_t order_id = generateOrderId();
     
     // Allocate order from memory pool with stop-loss constructor
-    Order* order = memory_pool.allocate();
+    Order* order = order_pool.allocate();
     
     // Allocate raw order from memory pool
-    Order* raw_order = memory_pool.allocate();
+    Order* raw_order = order_pool.allocate();
     new (raw_order) Order(order_id, std::chrono::duration_cast<std::chrono::milliseconds>(
                           std::chrono::system_clock::now().time_since_epoch()).count(),
                           limit_price, quantity, type, side, trigger_price);
     
     // Create shared_ptr with custom deleter
-    auto order = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&memory_pool));
+    auto order_ptr = std::shared_ptr<Order>(raw_order, PoolDeleter<Order>(&order_pool));
     
     // Stop-loss orders are kept pending until triggered
     std::cout << "\nStop-loss order submitted!" << std::endl;
@@ -193,7 +193,7 @@ uint64_t MatchingEngine::submitStopLossOrder(OrderSide side, int64_t trigger_pri
     
     // For simplicity, add to orderbook immediately
     // In a real system, would keep in separate pending list until triggered
-    orderbook.matchOrder(order);
+    orderbook.matchOrder(order_ptr);
     
     return order_id;
 }

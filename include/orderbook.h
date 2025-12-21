@@ -44,7 +44,7 @@ public:
     
     // Order management
     bool cancelOrder(uint64_t order_id);
-    bool modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity);
+    bool modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity, uint64_t new_timestamp);
     
     double getBestBid() const;
     double getBestAsk() const;

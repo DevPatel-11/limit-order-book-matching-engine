@@ -41,6 +41,7 @@ private:
     bool is_triggered;     // Whether stop-loss has been triggered
 
 public:
+    Order() = default;
     Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s);
     
     // Iceberg constructor
