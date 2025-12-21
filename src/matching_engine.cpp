@@ -13,7 +13,7 @@ uint64_t MatchingEngine::generateOrderId() {
     return order_id_counter.fetch_add(1);
 }
 
-uint64_t MatchingEngine::submitLimitOrder(OrderSide side, double price, uint64_t quantity) {
+uint64_t MatchingEngine::submitLimitOrder(OrderSide side, int64_t price, uint64_t quantity) {
     OrderType type = (side == OrderSide::BUY) ? OrderType::LIMIT_BUY : OrderType::LIMIT_SELL;
     
     uint64_t order_id = generateOrderId();
@@ -88,7 +88,7 @@ bool MatchingEngine::cancelOrder(uint64_t order_id) {
     return success;
 }
 
-bool MatchingEngine::modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity) {
+bool MatchingEngine::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity) {
     std::cout << "\n[MODIFY] Attempting to modify order #" << order_id 
               << " to " << new_quantity << "@" << new_price << std::endl;
     
@@ -130,7 +130,7 @@ void MatchingEngine::printPoolStats() const {
     std::cout << "=======================================\n" << std::endl;
 }
 
-uint64_t MatchingEngine::submitIcebergOrder(OrderSide side, double price, uint64_t total_quantity, uint64_t display_quantity) {
+uint64_t MatchingEngine::submitIcebergOrder(OrderSide side, int64_t price, uint64_t total_quantity, uint64_t display_quantity) {
     OrderType type = (side == OrderSide::BUY) ? OrderType::ICEBERG_BUY : OrderType::ICEBERG_SELL;
     
     uint64_t order_id = generateOrderId();
@@ -165,7 +165,7 @@ uint64_t MatchingEngine::submitIcebergOrder(OrderSide side, double price, uint64
     return order_id;
 }
 
-uint64_t MatchingEngine::submitStopLossOrder(OrderSide side, double trigger_price, double limit_price, uint64_t quantity) {
+uint64_t MatchingEngine::submitStopLossOrder(OrderSide side, int64_t trigger_price, int64_t limit_price, uint64_t quantity) {
     OrderType type = (side == OrderSide::BUY) ? OrderType::STOP_LOSS_BUY : OrderType::STOP_LOSS_SELL;
     
     uint64_t order_id = generateOrderId();

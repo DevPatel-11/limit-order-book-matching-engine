@@ -27,14 +27,14 @@ void runSingleThreadDemo() {
 
 void submitBuyOrders(MatchingEngine& engine, int count, int thread_id) {
     for (int i = 0; i < count; i++) {
-        double price = 100.0 - (thread_id * 10 + i) * 0.1;
+        int64_t price = 100.0 - (thread_id * 10 + i) * 0.1;
         engine.submitLimitOrder(OrderSide::BUY, price, 10);
     }
 }
 
 void submitSellOrders(MatchingEngine& engine, int count, int thread_id) {
     for (int i = 0; i < count; i++) {
-        double price = 101.0 + (thread_id * 10 + i) * 0.1;
+        int64_t price = 101.0 + (thread_id * 10 + i) * 0.1;
         engine.submitLimitOrder(OrderSide::SELL, price, 10);
     }
 }
@@ -90,13 +90,13 @@ void runFullDemo() {
     
     std::cout << "\n>>> Phase 1: Building Order Book\n" << std::endl;
     
-    uint64_t order1 = engine.submitLimitOrder(OrderSide::BUY, 100.00, 50);
-    uint64_t order2 = engine.submitLimitOrder(OrderSide::BUY, 99.50, 100);
-    uint64_t order3 = engine.submitLimitOrder(OrderSide::BUY, 99.00, 75);
+    uint64_t order1 = engine.submitLimitOrder(OrderSide::BUY, 1000000, 50);
+    uint64_t order2 = engine.submitLimitOrder(OrderSide::BUY, 9900000, 100);
+    uint64_t order3 = engine.submitLimitOrder(OrderSide::BUY, 990000, 75);
     
-    uint64_t order4 = engine.submitLimitOrder(OrderSide::SELL, 101.00, 60);
-    uint64_t order5 = engine.submitLimitOrder(OrderSide::SELL, 101.50, 80);
-    uint64_t order6 = engine.submitLimitOrder(OrderSide::SELL, 102.00, 100);
+    uint64_t order4 = engine.submitLimitOrder(OrderSide::SELL, 1010000, 60);
+    uint64_t order5 = engine.submitLimitOrder(OrderSide::SELL, 1015000, 80);
+    uint64_t order6 = engine.submitLimitOrder(OrderSide::SELL, 1020000, 100);
     
     engine.printBook();
     engine.printStats();
@@ -128,13 +128,13 @@ void runFullDemo() {
     engine.printBook();
     // Test 6: Iceberg Order Demo
     std::cout << "\n\n=== Test 6: Iceberg Orders (Hidden Quantity) ===" << std::endl;
-    std::cout << "Submitting iceberg buy order: 1000 total qty, 200 visible at $99.50" << std::endl;
-    uint64_t iceberg_id = engine.submitIcebergOrder(OrderSide::BUY, 99.50, 1000, 200);
+    std::cout << "Submitting iceberg buy order: 1000 total qty, 200 visible at $9900000" << std::endl;
+    uint64_t iceberg_id = engine.submitIcebergOrder(OrderSide::BUY, 9900000, 1000, 200);
     
-    std::cout << "\nSubmitting 3 sell orders (150 qty each) at $99.50 to match against iceberg:" << std::endl;
-    engine.submitLimitOrder(OrderSide::SELL, 99.50, 150); // Will partially fill iceberg display
-    engine.submitLimitOrder(OrderSide::SELL, 99.50, 150); // Will fully fill display, trigger replenish
-    engine.submitLimitOrder(OrderSide::SELL, 99.50, 150); // Will match against replenished display
+    std::cout << "\nSubmitting 3 sell orders (150 qty each) at $9900000 to match against iceberg:" << std::endl;
+    engine.submitLimitOrder(OrderSide::SELL, 9900000, 150); // Will partially fill iceberg display
+    engine.submitLimitOrder(OrderSide::SELL, 9900000, 150); // Will fully fill display, trigger replenish
+    engine.submitLimitOrder(OrderSide::SELL, 9900000, 150); // Will match against replenished display
     
     std::cout << "\n📊 Orderbook State (after iceberg partial fills):" << std::endl;
     engine.printBook();

@@ -4,7 +4,7 @@ A high-performance exchange-style limit order book implementation with price-tim
 
 ## Features
 
-- **Price-Time Priority Matching**: Orders matched at best price, with time priority for same price levels
+- **Strict FIFO Price-Time Priority**: Orders matched at best price, with time priority for same price levels
 - **Order Types**: Support for Limit Buy/Sell and Market Buy/Sell orders
 - **Partial Fills**: Orders can be partially filled across multiple trades
 - **Order Management**: Cancel and modify existing orders by ID

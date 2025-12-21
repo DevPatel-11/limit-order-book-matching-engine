@@ -18,16 +18,16 @@ private:
 public:
     MatchingEngine();
     
-    uint64_t submitLimitOrder(OrderSide side, double price, uint64_t quantity);
+    uint64_t submitLimitOrder(OrderSide side, int64_t price, uint64_t quantity);
     void submitMarketOrder(OrderSide side, uint64_t quantity);
     
     // Iceberg order
-    uint64_t submitIcebergOrder(OrderSide side, double price, uint64_t total_quantity, uint64_t display_quantity);
-    uint64_t submitStopLossOrder(OrderSide side, double trigger_price, double limit_price, uint64_t quantity);
+    uint64_t submitIcebergOrder(OrderSide side, int64_t price, uint64_t total_quantity, uint64_t display_quantity);
+    uint64_t submitStopLossOrder(OrderSide side, int64_t trigger_price, int64_t limit_price, uint64_t quantity);
     
     // Order management methods
     bool cancelOrder(uint64_t order_id);
-    bool modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity);
+    bool modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity);
     
     void printBook() const;
     void printTrades() const;

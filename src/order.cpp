@@ -4,13 +4,13 @@
 #include <algorithm>
 
 // Regular constructor
-Order::Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s)
+Order::Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s)
     : order_id(id), timestamp(ts), price(p), quantity(qty), 
       remaining_quantity(qty), type(t), side(s), is_iceberg(false),
       display_quantity(0), hidden_quantity(0) {}
 
 // Iceberg constructor
-Order::Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s,
+Order::Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s,
              uint64_t display_qty)
     : order_id(id), timestamp(ts), price(p), quantity(qty),
       remaining_quantity(qty), type(t), side(s), is_iceberg(true),
@@ -78,7 +78,7 @@ void Order::print() const {
 }
 
 // Stop-loss constructor
-Order::Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s, double trigger_p)
+Order::Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s, int64_t trigger_p)
     : order_id(id), timestamp(ts), price(p), quantity(qty), remaining_quantity(qty),
       type(t), side(s), is_iceberg(false), display_quantity(0), hidden_quantity(0),
       is_stop_loss(true), trigger_price(trigger_p), is_triggered(false) {

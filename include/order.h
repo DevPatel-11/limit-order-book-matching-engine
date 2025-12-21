@@ -24,7 +24,7 @@ class Order {
 private:
     uint64_t order_id;
     uint64_t timestamp;
-    double price;
+    int64_t price;
     uint64_t quantity;
     uint64_t remaining_quantity;
     OrderType type;
@@ -37,24 +37,24 @@ private:
 
     // Stop-loss order fields
     bool is_stop_loss;
-    double trigger_price;  // Price that triggers the stop-loss
+    int64_t trigger_price;  // Price that triggers the stop-loss
     bool is_triggered;     // Whether stop-loss has been triggered
 
 public:
-    Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s);
+    Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s);
     
     // Iceberg constructor
-    Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s,
+    Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s,
           uint64_t display_qty);
     
     // Getters
 
     // Stop-loss constructor
-    Order(uint64_t id, uint64_t ts, double p, uint64_t qty, OrderType t, OrderSide s,
-          double trigger_p);
+    Order(uint64_t id, uint64_t ts, int64_t p, uint64_t qty, OrderType t, OrderSide s,
+          int64_t trigger_p);
     uint64_t getOrderId() const { return order_id; }
     uint64_t getTimestamp() const { return timestamp; }
-    double getPrice() const { return price; }
+    int64_t getPrice() const { return price; }
     uint64_t getQuantity() const { return quantity; }
     uint64_t getRemainingQuantity() const { return remaining_quantity; }
     OrderType getType() const { return type; }
@@ -73,7 +73,7 @@ public:
 
     // Stop-loss methods
     bool isStopLoss() const { return is_stop_loss; }
-    double getTriggerPrice() const { return trigger_price; }
+    int64_t getTriggerPrice() const { return trigger_price; }
     bool isTriggered() const { return is_triggered; }
     void trigger() { is_triggered = true; }  // Mark stop-loss as triggered
     

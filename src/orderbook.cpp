@@ -131,7 +131,7 @@ bool OrderBook::cancelOrder(uint64_t order_id) {
     }
     
     OrderPtr order = it->second;
-    double price = order->getPrice();
+    int64_t price = order->getPrice();
     OrderSide side = order->getSide();
     
     auto removeFromQueue = [&](std::queue<OrderPtr>& q) -> bool {
@@ -184,7 +184,7 @@ bool OrderBook::cancelOrder(uint64_t order_id) {
     return false;
 }
 
-bool OrderBook::modifyOrder(uint64_t order_id, double new_price, uint64_t new_quantity) {
+bool OrderBook::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_quantity) {
     std::unique_lock<std::shared_mutex> lock(book_mutex);
     
     auto it = active_orders.find(order_id);
@@ -247,7 +247,7 @@ void OrderBook::printBook() const {
             total_qty += temp_queue.front()->getRemainingQuantity();
             temp_queue.pop();
         }
-        std::cout << "  " << std::fixed << std::setprecision(2) << price 
+        std::cout << "  " << std::fixed << std::setprecision(2) << price / 10000.0 
                   << " | " << total_qty << std::endl;
         count++;
     }
@@ -268,7 +268,7 @@ void OrderBook::printBook() const {
             total_qty += temp_queue.front()->getRemainingQuantity();
             temp_queue.pop();
         }
-        std::cout << "  " << std::fixed << std::setprecision(2) << price 
+        std::cout << "  " << std::fixed << std::setprecision(2) << price / 10000.0 
                   << " | " << total_qty << std::endl;
         count++;
     }
@@ -283,7 +283,7 @@ void OrderBook::printTrades() const {
         std::cout << "Trade: Buy#" << trade.buy_order_id 
                   << " <-> Sell#" << trade.sell_order_id
                   << " | " << trade.quantity << "@" 
-                  << std::fixed << std::setprecision(2) << trade.price 
+                  << std::fixed << std::setprecision(2) << trade.price / 10000.0 
                   << std::endl;
     }
     std::cout << "===================================\n" << std::endl;
@@ -343,7 +343,7 @@ void OrderBook::printDepth(int levels) const {
     if (!asks.empty() && !bids.empty()) {
         double spread = asks.begin()->first - bids.begin()->first;
         std::cout << "\n" << std::string(45, '=') << std::endl;
-        std::cout << "   📈 SPREAD: $" << std::fixed << std::setprecision(2) << spread << std::endl;
+        std::cout << "   📈 SPREAD: $" << std::fixed << std::setprecision(2) << spread / 10000.0 << std::endl;
         std::cout << std::string(45, '=') << std::endl;
     }
     
