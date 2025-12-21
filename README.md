@@ -169,6 +169,36 @@ Trade: Buy#7 <-> Sell#4 | 40@100.75
 - **Order Lookup**: O(1) via unordered_map
 - **Space**: O(N) for number of active orders
 
+
+## Performance Benchmarks
+
+See `benchmark/` directory for comprehensive performance testing harness.
+
+### Benchmark Results (100,000 orders)
+
+**LOB Engine (with matching):**
+- Throughput: ~10,000 orders/sec
+- P50 Latency: 12.96 us
+- P99 Latency: 429.78 us  
+- P99.9 Latency: 3890.26 us
+
+**Baseline STL (simple map+queue):**
+- Throughput: ~936,000 orders/sec
+- P50 Latency: 0.66 us
+- P99 Latency: 3.89 us
+- P99.9 Latency: 11.30 us
+
+The LOB engine trades submission latency for full order matching, market depth, and transaction semantics. The baseline shows pure insertion performance without matching logic.
+
+### Running Benchmarks
+
+```bash
+cd benchmark
+make all
+make run-lob      # Benchmark MatchingEngine
+make run-baseline # Benchmark baseline STL
+```
+
 ## API Reference
 
 ### MatchingEngine Methods
