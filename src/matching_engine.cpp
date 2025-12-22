@@ -4,7 +4,7 @@
 #include <iostream>
 
 MatchingEngine::MatchingEngine(bool verbose)
-    : verbose_(verbose)
+    : pool_(1024), verbose_(verbose)
 {}
 
 int64_t MatchingEngine::nowUs() const {
@@ -40,7 +40,8 @@ uint64_t MatchingEngine::submitLimit(Side side, int64_t price, uint64_t qty) {
                   << "  qty=" << qty << "\n";
     }
 
-    auto order  = std::make_shared<Order>(id, ts, side, OrderKind::LIMIT, price, qty);
+    Order* raw  = pool_.allocate(id, ts, side, OrderKind::LIMIT, price, qty);
+    auto order  = std::shared_ptr<Order>(raw, PoolDeleter<Order>(&pool_));
     auto trades = book_.match(order);
 
     if (verbose_) logTrades(trades);
@@ -58,9 +59,8 @@ void MatchingEngine::submitMarket(Side side, uint64_t qty) {
                   << "  qty=" << qty << "\n";
     }
 
-    // Market orders carry no price; 0 is a sentinel that never participates
-    // in price comparison (isMarket() bypasses all price checks in matching).
-    auto order  = std::make_shared<Order>(id, ts, side, OrderKind::MARKET, 0, qty);
+    Order* raw  = pool_.allocate(id, ts, side, OrderKind::MARKET, 0LL, qty);
+    auto order  = std::shared_ptr<Order>(raw, PoolDeleter<Order>(&pool_));
     auto trades = book_.match(order);
 
     if (verbose_) logTrades(trades);
@@ -107,4 +107,14 @@ void MatchingEngine::printStats() const {
 
     std::cout << "  Total trades  : " << book_.tradeHistory().size() << "\n"
               << "========================\n\n";
+}
+
+void MatchingEngine::printPoolStats() const {
+    size_t capacity = pool_.totalCapacity();
+    size_t free_cnt = pool_.freeCount();
+    std::cout << "\n===== MEMORY POOL =====\n"
+              << "  Capacity : " << capacity << " slots\n"
+              << "  Free     : " << free_cnt << " slots\n"
+              << "  In use   : " << (capacity - free_cnt) << " slots\n"
+              << "=======================\n\n";
 }

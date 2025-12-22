@@ -23,6 +23,9 @@ add_library(lob_core STATIC
 )
 target_include_directories(lob_core PUBLIC include)
 
+find_package(Threads REQUIRED)
+target_link_libraries(lob_core PUBLIC Threads::Threads)
+
 add_executable(orderbook src/main.cpp)
 target_link_libraries(orderbook PRIVATE lob_core)
 
