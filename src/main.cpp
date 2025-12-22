@@ -25,6 +25,7 @@ int main() {
     engine.printBook();
     engine.printTrades();
     engine.printStats();
+    engine.printPoolStats();
 
     std::cout << "\n=== Phase 5: Cancel already-filled order ===\n";
     engine.cancelOrder(id2);   // still active — should cancel

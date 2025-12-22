@@ -1,6 +1,7 @@
 #pragma once
 
 #include "orderbook.h"
+#include "memory_pool.h"
 #include <atomic>
 #include <vector>
 
@@ -17,12 +18,14 @@ public:
     void printBook(int levels = 5) const;
     void printTrades()             const;
     void printStats()              const;
+    void printPoolStats()          const;
 
     const OrderBook& book() const { return book_; }
 
 private:
     OrderBook             book_;
     std::atomic<uint64_t> next_id_{1};
+    MemoryPool<Order>     pool_;
     bool                  verbose_;
 
     int64_t  nowUs()  const;
