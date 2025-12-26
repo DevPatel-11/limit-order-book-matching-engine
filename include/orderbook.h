@@ -5,6 +5,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <shared_mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -46,6 +47,7 @@ public:
 private:
     using Level = std::deque<OrderPtr>;
 
+    mutable std::shared_mutex                       mutex_;
     std::map<int64_t, Level, std::greater<int64_t>> bids_;
     std::map<int64_t, Level>                        asks_;
     std::unordered_map<uint64_t, OrderPtr>          active_;

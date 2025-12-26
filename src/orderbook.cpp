@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 
 void OrderBook::addToBook(OrderPtr order) {
     if (order->side() == Side::BUY) {
@@ -37,26 +38,6 @@ bool OrderBook::cancelLocked(uint64_t order_id) {
     return true;
 }
 
-bool OrderBook::cancelOrder(uint64_t order_id) {
-    return cancelLocked(order_id);
-}
-
-bool OrderBook::modifyOrder(uint64_t order_id, int64_t new_price,
-                            uint64_t new_qty, int64_t new_timestamp_us) {
-    auto it = active_.find(order_id);
-    if (it == active_.end()) return false;
-
-    OrderPtr old_order = it->second;
-    OrderPtr new_order = std::make_shared<Order>(
-        old_order->id(), new_timestamp_us,
-        old_order->side(), old_order->kind(),
-        new_price, new_qty
-    );
-
-    cancelLocked(order_id);   // safe: no re-entrant lock needed
-    addToBook(new_order);
-    return true;
-}
 
 Trade OrderBook::makeTrade(uint64_t buy_id, uint64_t sell_id,
                             int64_t price, uint64_t qty, int64_t ts) {
@@ -140,26 +121,55 @@ std::vector<Trade> OrderBook::matchSell(OrderPtr order) {
 }
 
 std::vector<Trade> OrderBook::match(OrderPtr order) {
+    std::unique_lock lock(mutex_);
     return order->side() == Side::BUY ? matchBuy(order) : matchSell(order);
 }
 
+bool OrderBook::cancelOrder(uint64_t order_id) {
+    std::unique_lock lock(mutex_);
+    return cancelLocked(order_id);
+}
+
+bool OrderBook::modifyOrder(uint64_t order_id, int64_t new_price,
+                            uint64_t new_qty, int64_t new_timestamp_us) {
+    std::unique_lock lock(mutex_);
+    auto it = active_.find(order_id);
+    if (it == active_.end()) return false;
+
+    OrderPtr old_order = it->second;
+    OrderPtr new_order = std::make_shared<Order>(
+        old_order->id(), new_timestamp_us,
+        old_order->side(), old_order->kind(),
+        new_price, new_qty
+    );
+
+    cancelLocked(order_id);
+    addToBook(new_order);
+    return true;
+}
+
 int64_t OrderBook::bestBid() const {
+    std::shared_lock lock(mutex_);
     return bids_.empty() ? 0 : bids_.begin()->first;
 }
 
 int64_t OrderBook::bestAsk() const {
+    std::shared_lock lock(mutex_);
     return asks_.empty() ? 0 : asks_.begin()->first;
 }
 
 int64_t OrderBook::spread() const {
-    return (bids_.empty() || asks_.empty()) ? 0 : bestAsk() - bestBid();
+    std::shared_lock lock(mutex_);
+    if (bids_.empty() || asks_.empty()) return 0;
+    return asks_.begin()->first - bids_.begin()->first;
 }
 
-size_t OrderBook::bidLevels()   const { return bids_.size(); }
-size_t OrderBook::askLevels()   const { return asks_.size(); }
-size_t OrderBook::activeOrders() const { return active_.size(); }
+size_t OrderBook::bidLevels()    const { std::shared_lock l(mutex_); return bids_.size(); }
+size_t OrderBook::askLevels()    const { std::shared_lock l(mutex_); return asks_.size(); }
+size_t OrderBook::activeOrders() const { std::shared_lock l(mutex_); return active_.size(); }
 
 void OrderBook::printBook(int levels) const {
+    std::shared_lock lock(mutex_);
     std::cout << "\n===== ORDER BOOK =====\n"
               << std::fixed << std::setprecision(2);
 
@@ -200,6 +210,7 @@ void OrderBook::printBook(int levels) const {
 }
 
 void OrderBook::printTrades() const {
+    std::shared_lock lock(mutex_);
     std::cout << "\n===== TRADE HISTORY (" << trades_.size() << " trade(s)) =====\n"
               << std::fixed << std::setprecision(2);
     for (auto& t : trades_) {
