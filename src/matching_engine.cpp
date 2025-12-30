@@ -66,6 +66,25 @@ void MatchingEngine::submitMarket(Side side, uint64_t qty) {
     if (verbose_) logTrades(trades);
 }
 
+uint64_t MatchingEngine::submitIceberg(Side side, int64_t price,
+                                       uint64_t total_qty, uint64_t display_qty) {
+    uint64_t id = nextId();
+    int64_t  ts = nowUs();
+
+    if (verbose_)
+        std::cout << "[ICEBERG " << (side == Side::BUY ? "BUY " : "SELL")
+                  << "] id=" << id
+                  << "  price=$" << std::fixed << std::setprecision(2)
+                  << price / static_cast<double>(PRICE_SCALE)
+                  << "  total=" << total_qty << "  visible=" << display_qty << "\n";
+
+    Order* raw  = pool_.allocate(id, ts, side, price, total_qty, display_qty);
+    auto order  = std::shared_ptr<Order>(raw, PoolDeleter<Order>(&pool_));
+    auto trades = book_.match(order);
+    if (verbose_) logTrades(trades);
+    return id;
+}
+
 bool MatchingEngine::cancelOrder(uint64_t order_id) {
     bool ok = book_.cancelOrder(order_id);
     if (verbose_)

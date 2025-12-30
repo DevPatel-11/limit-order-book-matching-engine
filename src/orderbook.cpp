@@ -57,8 +57,13 @@ std::vector<Trade> OrderBook::matchBuy(OrderPtr order) {
         while (order->isActive() && !level.empty()) {
             OrderPtr resting = level.front();
 
-            uint64_t qty   = std::min(order->leaves(), resting->leaves());
-            int64_t  price = resting->price();
+            uint64_t available = resting->isIceberg()
+                                 ? resting->visibleQty()
+                                 : resting->leaves();
+            if (available == 0) { level.pop_front(); continue; }
+
+            uint64_t qty   = std::min(order->leaves(), available);
+            int64_t  price = it->first;
 
             order->fill(qty);
             resting->fill(qty);
@@ -71,6 +76,8 @@ std::vector<Trade> OrderBook::matchBuy(OrderPtr order) {
             if (resting->isFilled()) {
                 active_.erase(resting->id());
                 level.pop_front();
+            } else if (resting->isIceberg() && resting->visibleQty() == 0) {
+                resting->replenish();   // refill display lot; order stays in queue
             }
         }
 
@@ -88,15 +95,19 @@ std::vector<Trade> OrderBook::matchSell(OrderPtr order) {
     while (order->isActive() && !bids_.empty()) {
         auto it = bids_.begin();
 
-        // Limit orders may not hit below their stated price.
         if (!order->isMarket() && it->first < order->price()) break;
 
         Level& level = it->second;
         while (order->isActive() && !level.empty()) {
             OrderPtr resting = level.front();
 
-            uint64_t qty   = std::min(order->leaves(), resting->leaves());
-            int64_t  price = resting->price();
+            uint64_t available = resting->isIceberg()
+                                 ? resting->visibleQty()
+                                 : resting->leaves();
+            if (available == 0) { level.pop_front(); continue; }
+
+            uint64_t qty   = std::min(order->leaves(), available);
+            int64_t  price = it->first;
 
             order->fill(qty);
             resting->fill(qty);
@@ -109,6 +120,8 @@ std::vector<Trade> OrderBook::matchSell(OrderPtr order) {
             if (resting->isFilled()) {
                 active_.erase(resting->id());
                 level.pop_front();
+            } else if (resting->isIceberg() && resting->visibleQty() == 0) {
+                resting->replenish();
             }
         }
 
@@ -180,7 +193,7 @@ void OrderBook::printBook(int levels) const {
     for (auto& [price, level] : asks_) {
         if (static_cast<int>(ask_rows.size()) >= levels) break;
         uint64_t total = 0;
-        for (auto& o : level) total += o->leaves();
+        for (auto& o : level) total += o->visibleQty();
         ask_rows.emplace_back(price, total);
     }
 
@@ -200,7 +213,7 @@ void OrderBook::printBook(int levels) const {
     for (auto& [price, level] : bids_) {
         if (count++ >= levels) break;
         uint64_t total = 0;
-        for (auto& o : level) total += o->leaves();
+        for (auto& o : level) total += o->visibleQty();
         std::cout << "    $" << std::setw(9)
                   << (static_cast<double>(price) / PRICE_SCALE)
                   << "  x  " << total << "\n";

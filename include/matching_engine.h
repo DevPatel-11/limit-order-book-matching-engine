@@ -11,6 +11,8 @@ public:
 
     uint64_t submitLimit(Side side, int64_t price, uint64_t qty);
     void     submitMarket(Side side, uint64_t qty);
+    uint64_t submitIceberg(Side side, int64_t price,
+                           uint64_t total_qty, uint64_t display_qty);
 
     bool cancelOrder(uint64_t order_id);
     bool modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_qty);

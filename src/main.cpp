@@ -2,33 +2,35 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include <chrono>
 
-static void runSingleThreaded() {
-    std::cout << "\n=== Single-threaded demo ===\n";
+static void runIcebergDemo() {
+    std::cout << "\n=== Iceberg order demo ===\n";
     MatchingEngine engine;
 
-    uint64_t id1 = engine.submitLimit(Side::BUY,  990000, 100);
-    uint64_t id2 = engine.submitLimit(Side::BUY,  995000,  50);
-               engine.submitLimit(Side::BUY,  998000,  75);
-    uint64_t id4 = engine.submitLimit(Side::SELL, 1010000, 60);
-               engine.submitLimit(Side::SELL, 1015000, 80);
+    // Build the ask side
+    engine.submitLimit(Side::SELL, 1000000, 30);  // $100.00 x 30
 
-    engine.cancelOrder(id1);
-    engine.modifyOrder(id4, 1005000, 40);
-    engine.submitLimit(Side::BUY, 1010000, 60);
-    engine.cancelOrder(id2);
+    // Iceberg buy: 500 total, only 100 visible at a time
+    std::cout << "\nSubmitting iceberg buy: 500 total, 100 visible @ $100.00\n";
+    uint64_t ice_id = engine.submitIceberg(Side::BUY, 1000000, 500, 100);
+    engine.printBook();
 
+    // Several sells match against the iceberg — trigger replenishment
+    std::cout << "\nSell 120 @ $100.00 — exhausts visible lot, triggers replenish\n";
+    engine.submitLimit(Side::SELL, 1000000, 120);
+    engine.printBook();
+
+    std::cout << "\nSell 300 @ $100.00 — drains 3 more lots\n";
+    engine.submitLimit(Side::SELL, 1000000, 300);
     engine.printBook();
     engine.printTrades();
-    engine.printPoolStats();
+
+    (void)ice_id;
 }
 
 static void runMultiThreaded() {
     std::cout << "\n=== Multi-threaded demo (4 threads) ===\n";
-    MatchingEngine engine(false);   // quiet mode
-
-    auto t_start = std::chrono::steady_clock::now();
+    MatchingEngine engine(false);
 
     std::vector<std::thread> threads;
     for (int t = 0; t < 2; ++t)
@@ -45,17 +47,12 @@ static void runMultiThreaded() {
         });
 
     for (auto& th : threads) th.join();
-
-    auto t_end = std::chrono::steady_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start).count();
-
-    std::cout << "200 orders across 4 threads in " << ms << " ms\n";
     engine.printStats();
     engine.printPoolStats();
 }
 
 int main() {
-    runSingleThreaded();
+    runIcebergDemo();
     runMultiThreaded();
     return 0;
 }
