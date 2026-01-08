@@ -7,29 +7,44 @@ static void runIcebergDemo() {
     std::cout << "\n=== Iceberg order demo ===\n";
     MatchingEngine engine;
 
-    // Build the ask side
-    engine.submitLimit(Side::SELL, 1000000, 30);  // $100.00 x 30
+    engine.submitLimit(Side::SELL, 1000000, 30);
 
-    // Iceberg buy: 500 total, only 100 visible at a time
-    std::cout << "\nSubmitting iceberg buy: 500 total, 100 visible @ $100.00\n";
-    uint64_t ice_id = engine.submitIceberg(Side::BUY, 1000000, 500, 100);
+    std::cout << "\nIceberg buy: 500 total, 100 visible @ $100.00\n";
+    engine.submitIceberg(Side::BUY, 1000000, 500, 100);
     engine.printBook();
 
-    // Several sells match against the iceberg — trigger replenishment
-    std::cout << "\nSell 120 @ $100.00 — exhausts visible lot, triggers replenish\n";
     engine.submitLimit(Side::SELL, 1000000, 120);
+    engine.submitLimit(Side::SELL, 1000000, 300);
+    engine.printTrades();
+}
+
+static void runStopLossDemo() {
+    std::cout << "\n=== Stop-loss order demo ===\n";
+    MatchingEngine engine;
+
+    // Bids at two levels
+    engine.submitLimit(Side::BUY, 998000, 100);   // $99.80
+    engine.submitLimit(Side::BUY, 995000, 200);   // $99.50
+
+    // Stop-loss sell: triggers when last trade <= $99.50; limit at $99.40
+    engine.submitStopLoss(Side::SELL, 995000, 994000, 100);
+    std::cout << "Pending stop-loss placed. Book:\n";
     engine.printBook();
 
-    std::cout << "\nSell 300 @ $100.00 — drains 3 more lots\n";
-    engine.submitLimit(Side::SELL, 1000000, 300);
+    // Exhaust the $99.80 level with a market sell
+    std::cout << "\nMarket sell 100 — clears $99.80 bid, last price = $99.80 (no trigger)\n";
+    engine.submitMarket(Side::SELL, 100);
+    engine.printBook();
+
+    // Now a sell that trades at $99.50 — this hits the trigger
+    std::cout << "\nLimit sell 50 @ $99.50 — last price = $99.50, stop-loss triggers!\n";
+    engine.submitLimit(Side::SELL, 995000, 50);
     engine.printBook();
     engine.printTrades();
-
-    (void)ice_id;
 }
 
 static void runMultiThreaded() {
-    std::cout << "\n=== Multi-threaded demo (4 threads) ===\n";
+    std::cout << "\n=== Multi-threaded demo ===\n";
     MatchingEngine engine(false);
 
     std::vector<std::thread> threads;
@@ -48,11 +63,11 @@ static void runMultiThreaded() {
 
     for (auto& th : threads) th.join();
     engine.printStats();
-    engine.printPoolStats();
 }
 
 int main() {
     runIcebergDemo();
+    runStopLossDemo();
     runMultiThreaded();
     return 0;
 }

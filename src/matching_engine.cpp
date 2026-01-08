@@ -85,6 +85,27 @@ uint64_t MatchingEngine::submitIceberg(Side side, int64_t price,
     return id;
 }
 
+uint64_t MatchingEngine::submitStopLoss(Side side, int64_t trigger_price,
+                                        int64_t limit_price, uint64_t qty) {
+    uint64_t id = nextId();
+    int64_t  ts = nowUs();
+
+    if (verbose_)
+        std::cout << "[STOP-LOSS " << (side == Side::BUY ? "BUY " : "SELL")
+                  << "] id=" << id
+                  << "  trigger=$" << std::fixed << std::setprecision(2)
+                  << trigger_price / static_cast<double>(PRICE_SCALE)
+                  << "  limit=$"
+                  << limit_price / static_cast<double>(PRICE_SCALE)
+                  << "  qty=" << qty << "\n";
+
+    // Single allocation — the original code had a double-alloc leak here
+    Order* raw = pool_.allocate(id, ts, side, trigger_price, limit_price, qty);
+    auto order = std::shared_ptr<Order>(raw, PoolDeleter<Order>(&pool_));
+    book_.match(order);   // routes to pending_stops_ until triggered
+    return id;
+}
+
 bool MatchingEngine::cancelOrder(uint64_t order_id) {
     bool ok = book_.cancelOrder(order_id);
     if (verbose_)

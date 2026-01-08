@@ -26,6 +26,7 @@ public:
     OrderBook(const OrderBook&)            = delete;
     OrderBook& operator=(const OrderBook&) = delete;
 
+    // Returns trades generated. Stop-loss orders are held until triggered.
     std::vector<Trade> match(OrderPtr order);
 
     bool cancelOrder(uint64_t order_id);
@@ -51,11 +52,14 @@ private:
     std::map<int64_t, Level, std::greater<int64_t>> bids_;
     std::map<int64_t, Level>                        asks_;
     std::unordered_map<uint64_t, OrderPtr>          active_;
+    std::vector<OrderPtr>                           pending_stops_;
+    std::vector<OrderPtr>                           triggered_stops_;   // staged for matching
     std::vector<Trade>                              trades_;
     uint64_t                                        next_trade_id_{1};
 
     void               addToBook(OrderPtr order);
-    bool               cancelLocked(uint64_t order_id);   // caller holds no public lock
+    bool               cancelLocked(uint64_t order_id);
+    void               checkStopTriggers(int64_t last_traded_price);
     Trade              makeTrade(uint64_t buy_id, uint64_t sell_id,
                                  int64_t price, uint64_t qty, int64_t ts);
     std::vector<Trade> matchBuy(OrderPtr order);
