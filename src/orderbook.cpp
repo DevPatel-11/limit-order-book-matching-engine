@@ -44,6 +44,22 @@ Trade OrderBook::makeTrade(uint64_t buy_id, uint64_t sell_id,
     return Trade{next_trade_id_++, buy_id, sell_id, price, qty, ts};
 }
 
+void OrderBook::checkStopTriggers(int64_t last_price) {
+    auto it = pending_stops_.begin();
+    while (it != pending_stops_.end()) {
+        OrderPtr& stop = *it;
+        bool fire = (stop->side() == Side::SELL && last_price <= stop->triggerPrice())
+                 || (stop->side() == Side::BUY  && last_price >= stop->triggerPrice());
+        if (fire) {
+            stop->trigger();
+            triggered_stops_.push_back(stop);   // processed after current match cycle
+            it = pending_stops_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 std::vector<Trade> OrderBook::matchBuy(OrderPtr order) {
     std::vector<Trade> result;
 
@@ -72,6 +88,7 @@ std::vector<Trade> OrderBook::matchBuy(OrderPtr order) {
                                 price, qty, order->timestamp());
             result.push_back(t);
             trades_.push_back(t);
+            checkStopTriggers(price);
 
             if (resting->isFilled()) {
                 active_.erase(resting->id());
@@ -116,6 +133,7 @@ std::vector<Trade> OrderBook::matchSell(OrderPtr order) {
                                 price, qty, order->timestamp());
             result.push_back(t);
             trades_.push_back(t);
+            checkStopTriggers(price);
 
             if (resting->isFilled()) {
                 active_.erase(resting->id());
@@ -135,7 +153,26 @@ std::vector<Trade> OrderBook::matchSell(OrderPtr order) {
 
 std::vector<Trade> OrderBook::match(OrderPtr order) {
     std::unique_lock lock(mutex_);
-    return order->side() == Side::BUY ? matchBuy(order) : matchSell(order);
+
+    if (order->isStopLoss() && !order->isTriggered()) {
+        pending_stops_.push_back(order);
+        return {};
+    }
+
+    std::vector<Trade> all_trades =
+        (order->side() == Side::BUY) ? matchBuy(order) : matchSell(order);
+
+    // Triggered stops are collected inside checkStopTriggers; run them now
+    while (!triggered_stops_.empty()) {
+        auto batch = std::move(triggered_stops_);
+        triggered_stops_.clear();
+        for (auto& stop : batch) {
+            auto t = (stop->side() == Side::BUY) ? matchBuy(stop) : matchSell(stop);
+            all_trades.insert(all_trades.end(), t.begin(), t.end());
+        }
+    }
+
+    return all_trades;
 }
 
 bool OrderBook::cancelOrder(uint64_t order_id) {
