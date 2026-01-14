@@ -42,8 +42,9 @@ public:
 
     const std::vector<Trade>& tradeHistory() const { return trades_; }
 
-    void printBook(int levels = 5) const;
-    void printTrades()             const;
+    void printBook(int levels = 5)  const;
+    void printDepth(int levels = 5) const;
+    void printTrades()              const;
 
 private:
     using Level = std::deque<OrderPtr>;

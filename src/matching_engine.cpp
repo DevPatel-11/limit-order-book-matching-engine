@@ -122,8 +122,9 @@ bool MatchingEngine::modifyOrder(uint64_t order_id, int64_t new_price, uint64_t 
     return ok;
 }
 
-void MatchingEngine::printBook(int levels) const { book_.printBook(levels); }
-void MatchingEngine::printTrades()          const { book_.printTrades();    }
+void MatchingEngine::printBook(int levels)  const { book_.printBook(levels);  }
+void MatchingEngine::printDepth(int levels) const { book_.printDepth(levels); }
+void MatchingEngine::printTrades()          const { book_.printTrades();      }
 
 void MatchingEngine::printStats() const {
     std::cout << "\n===== ENGINE STATS =====\n"

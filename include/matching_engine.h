@@ -19,10 +19,11 @@ public:
     bool cancelOrder(uint64_t order_id);
     bool modifyOrder(uint64_t order_id, int64_t new_price, uint64_t new_qty);
 
-    void printBook(int levels = 5) const;
-    void printTrades()             const;
-    void printStats()              const;
-    void printPoolStats()          const;
+    void printBook(int levels = 5)  const;
+    void printDepth(int levels = 5) const;
+    void printTrades()              const;
+    void printStats()               const;
+    void printPoolStats()           const;
 
     const OrderBook& book() const { return book_; }
 
