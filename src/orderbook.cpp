@@ -273,3 +273,59 @@ void OrderBook::printTrades() const {
     }
     std::cout << "==========================================\n\n";
 }
+
+void OrderBook::printDepth(int levels) const {
+    std::shared_lock lock(mutex_);
+    std::cout << std::fixed << std::setprecision(2);
+
+    // Collect ask levels (ascending in the map = best ask first)
+    using Row = std::pair<int64_t, uint64_t>;
+    std::vector<Row> ask_rows, bid_rows;
+
+    for (auto& [price, level] : asks_) {
+        if (static_cast<int>(ask_rows.size()) >= levels) break;
+        uint64_t total = 0;
+        for (auto& o : level) total += o->visibleQty();
+        ask_rows.push_back({price, total});
+    }
+    for (auto& [price, level] : bids_) {
+        if (static_cast<int>(bid_rows.size()) >= levels) break;
+        uint64_t total = 0;
+        for (auto& o : level) total += o->visibleQty();
+        bid_rows.push_back({price, total});
+    }
+
+    std::cout << "\n=== Market Depth (Top " << levels << " Levels) ===\n";
+    std::cout << std::setw(12) << "Price"
+              << std::setw(10) << "Qty"
+              << std::setw(14) << "Cumulative" << "\n";
+    std::cout << std::string(36, '-') << "\n";
+
+    // Asks: display highest-to-lowest (furthest from spread first)
+    // cumulative counts from best ask outward
+    std::cout << "ASKS:\n";
+    uint64_t cum = 0;
+    for (auto& [p, q] : ask_rows) cum += q;
+    for (auto it = ask_rows.rbegin(); it != ask_rows.rend(); ++it) {
+        std::cout << std::setw(12) << it->first / static_cast<double>(PRICE_SCALE)   // FIX: consistent scaling
+                  << std::setw(10) << it->second
+                  << std::setw(14) << cum << "\n";
+        cum -= it->second;
+    }
+
+    if (!bids_.empty() && !asks_.empty()) {
+        double spr = (asks_.begin()->first - bids_.begin()->first)
+                     / static_cast<double>(PRICE_SCALE);
+        std::cout << "--- spread: $" << spr << " ---\n";
+    }
+
+    std::cout << "BIDS:\n";
+    cum = 0;
+    for (auto& [p, q] : bid_rows) {
+        cum += q;
+        std::cout << std::setw(12) << p / static_cast<double>(PRICE_SCALE)            // FIX: consistent scaling
+                  << std::setw(10) << q
+                  << std::setw(14) << cum << "\n";
+    }
+    std::cout << std::string(36, '=') << "\n";
+}

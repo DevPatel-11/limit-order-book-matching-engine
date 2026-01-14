@@ -65,9 +65,26 @@ static void runMultiThreaded() {
     engine.printStats();
 }
 
+static void runDepthDemo() {
+    std::cout << "\n=== Market depth visualization ===\n";
+    MatchingEngine engine(false);
+
+    for (int i = 0; i < 5; ++i)
+        engine.submitLimit(Side::BUY,
+            static_cast<int64_t>(1000000 - (i + 1) * 5000),
+            static_cast<uint64_t>(50 + i * 10));
+    for (int i = 0; i < 5; ++i)
+        engine.submitLimit(Side::SELL,
+            static_cast<int64_t>(1000000 + (i + 1) * 5000),
+            static_cast<uint64_t>(40 + i * 15));
+
+    engine.printDepth(5);
+}
+
 int main() {
     runIcebergDemo();
     runStopLossDemo();
     runMultiThreaded();
+    runDepthDemo();
     return 0;
 }
