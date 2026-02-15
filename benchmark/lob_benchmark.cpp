@@ -1,6 +1,7 @@
 #include "benchmark.h"
 #include "matching_engine.h"
 #include "order_event.h"
+#include "concurrent_matching_engine.h"
 
 #include <algorithm>
 #include <deque>
@@ -240,12 +241,16 @@ static void runModifyBenchmark(uint64_t n) {
     stats.print_summary("Modify order latency");
 }
 
+// Declared in concurrent_matching_engine.cpp
+void runConcurrentBenchmark(int num_producers, uint64_t orders_per_producer);
+
 int main(int argc, char** argv) {
     uint64_t n = (argc > 1) ? std::stoull(argv[1]) : 200000;
 
     runLatencyBenchmark(n);
     runThroughputBenchmark(n * 5);
     runModifyBenchmark(50000);
+    runConcurrentBenchmark(4, n / 4);
 
     return 0;
 }
