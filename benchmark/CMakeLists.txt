@@ -1,4 +1,7 @@
-add_executable(lob_benchmark lob_benchmark.cpp)
+add_executable(lob_benchmark
+  lob_benchmark.cpp
+  concurrent_matching_engine.cpp
+)
 target_link_libraries(lob_benchmark PRIVATE lob_core pthread)
 target_include_directories(lob_benchmark PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
