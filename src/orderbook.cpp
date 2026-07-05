@@ -241,8 +241,10 @@ void OrderBook::printBook(int levels) const {
                   << "  x  " << it->second << "\n";
     }
 
+    int64_t spr = (bids_.empty() || asks_.empty()) ? 0
+                 : asks_.begin()->first - bids_.begin()->first;
     std::cout << "  -------- spread: $"
-              << (static_cast<double>(spread()) / PRICE_SCALE)
+              << (static_cast<double>(spr) / PRICE_SCALE)
               << " --------\n";
 
     std::cout << "  BIDS:\n";
