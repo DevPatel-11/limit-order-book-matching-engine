@@ -1,204 +1,273 @@
 # Limit Order Book Matching Engine
 
-A high-performance C++17 limit order book matching engine with price-time (FIFO) priority, iceberg orders, stop-loss orders, memory pooling, and a concurrent event-driven architecture.
+This is a C++17 implementation of a limit order book matching engine — the core component of any exchange or electronic trading platform. Orders are matched using price-time (FIFO) priority, with support for limit, market, iceberg, and stop-loss orders. The project also includes a slab memory pool for order allocation and a lock-free concurrent event queue backed by the Michael-Scott algorithm.
 
-## Features
+---
 
-- **Price-time priority** — FIFO within each price level using `std::deque`
-- **Iceberg orders** — hidden quantity replenished automatically; time priority preserved
-- **Stop-loss orders** — triggered by last traded price, processed in batch after each match cycle
-- **Custom memory pool** — slab allocator with placement-new and `PoolDeleter` for `shared_ptr` integration
-- **Thread-safe order book** — `std::shared_mutex` for concurrent reads, exclusive writes
-- **Lock-free concurrent engine** — Michael-Scott MPSC queue decouples producers from the matching thread
-- **Market depth visualization** — cumulative volume at each price level with consistent scaling
-- **Comprehensive test suite** — 53 tests across all components
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Order Matching Flow](#order-matching-flow)
+- [Price Representation](#price-representation)
+- [Order Types](#order-types)
+- [Key Design Decisions](#key-design-decisions)
+- [Building](#building)
+- [Benchmark Results](#benchmark-results)
+- [Test Suite](#test-suite)
+- [Project Structure](#project-structure)
+- [License](#license)
+
+---
 
 ## Architecture
 
+```mermaid
+graph TD
+    CME[ConcurrentMatchingEngine]
+    CQ[ConcurrentQueue]
+    ME[MatchingEngine]
+    MP[MemoryPool]
+    OB[OrderBook]
+    B[bids — map descending]
+    A[asks — map ascending]
+    AC[active — unordered_map]
+    PS[pending_stops_]
+    TS[triggered_stops_]
+
+    CME --> CQ
+    CQ --> ME
+    ME --> OB
+    ME --> MP
+    OB --> B
+    OB --> A
+    OB --> AC
+    OB --> PS
+    OB --> TS
 ```
-MatchingEngine          (public API, atomic ID generation, verbose logging)
-  └─ OrderBook          (price-time book, matching, cancel/modify, stop-loss)
-       ├─ bids_         map<int64_t, deque<OrderPtr>, greater<>>  — best bid first
-       ├─ asks_         map<int64_t, deque<OrderPtr>>             — best ask first
-       ├─ active_       unordered_map<uint64_t, OrderPtr>         — O(1) lookup
-       └─ pending_stops_ / triggered_stops_                       — stop-loss pipeline
 
-MemoryPool<T>           (slab allocator, placement-new outside lock)
-ConcurrentMatchingEngine (MPSC event queue + consumer thread)
-ConcurrentQueue<T>      (Michael-Scott lock-free queue, cache-line padded)
+`MatchingEngine` is the single-threaded facade used directly. `ConcurrentMatchingEngine` wraps it with a lock-free queue so that multiple producer threads can enqueue events without blocking on matching logic; a single consumer thread drains the queue and dispatches to the underlying `MatchingEngine`.
+
+---
+
+## Order Matching Flow
+
+```mermaid
+flowchart LR
+    A[Incoming order] --> B[MatchingEngine.submit*]
+    B --> C[OrderBook.match\nacquires unique_lock]
+    C --> D{OrderKind}
+    D -->|STOP_LOSS| E[append to pending_stops_]
+    D -->|LIMIT or MARKET| F{Side}
+    F -->|BUY| G[matchBuy\nwalk asks levels low to high]
+    F -->|SELL| H[matchSell\nwalk bids levels high to low]
+    G --> I[checkStopTriggers\nlast_traded_price]
+    H --> I
+    I --> J{stops triggered?}
+    J -->|yes| K[batch move to triggered_stops_\nclear pending list]
+    K --> L[process each triggered stop\nrecurse into matchBuy or matchSell]
+    L --> I
+    J -->|no| M[return Trade vector to caller]
+    L --> M
 ```
 
-### Price representation
+---
 
-All prices are stored as `int64_t` scaled by `PRICE_SCALE = 10000` (4 decimal places). `$100.00` is stored as `1000000`. No floating point in the hot path.
+## Price Representation
 
-### Key design decisions
+All prices are stored as `int64_t` values scaled by `PRICE_SCALE = 10000`. A price of `$100.00` is represented as `1000000`, and `$99.50` as `995000`. This avoids floating-point arithmetic in the matching hot path. To convert for display, divide by `10000.0`. All public API parameters follow this convention.
 
-**`cancelLocked()` — deadlock-free modify**  
-`modifyOrder()` acquires one `unique_lock`, calls the private `cancelLocked()` (no lock), then `addToBook()`. The original double-lock design caused a deadlock; the private helper eliminates re-entrant locking.
+---
 
-**Stop-loss batch processing**  
-`checkStopTriggers()` moves triggered orders to `triggered_stops_`. After each match cycle, `match()` processes them in a `while(!empty()) { batch = move; clear; for each: match }` loop that handles cascading triggers without recursive lock acquisition.
+## Order Types
 
-**Iceberg replenishment**  
-`replenish()` uses `orig_display_qty_` to size each lot correctly. The order stays at its position in the deque — time priority is preserved across lot boundaries.
+| Type | Trigger | Rests in book | Use case |
+|------|---------|---------------|----------|
+| Limit | Submitted immediately | Yes, if not fully filled | Buy or sell at a specific price or better |
+| Market | Submitted immediately | No | Execute immediately at the best available price |
+| Iceberg | Submitted immediately | Yes — only `display_qty` is visible | Large orders that should not reveal full size |
+| Stop-Loss | When `last_traded_price <= trigger_price` (sell) | No — held in `pending_stops_` | Convert to a limit order when price moves against a position |
 
-**Memory pool outside-lock placement-new**  
-`allocate()` grabs a `Block*` under the mutex, then runs placement-new outside it. The block is unreachable to other threads until it's returned to the free list via `deallocate()`, so construction is safe without the lock.
+### Code examples
+
+```cpp
+#include "matching_engine.h"
+
+MatchingEngine engine;
+
+// Limit order — buy 100 shares at $100.00
+uint64_t id = engine.submitLimit(Side::BUY, 1000000, 100);
+
+// Market order — sell 50 shares at the best available bid
+engine.submitMarket(Side::SELL, 50);
+
+// Iceberg order — buy 500 total, only 100 visible at a time, at $100.00
+uint64_t ice_id = engine.submitIceberg(Side::BUY, 1000000, 500, 100);
+
+// Stop-loss order — if last trade reaches $99.50, submit a sell limit at $99.40
+uint64_t sl_id = engine.submitStopLoss(Side::SELL, 995000, 994000, 100);
+
+// Cancel or modify by ID
+engine.cancelOrder(id);
+engine.modifyOrder(ice_id, 1005000, 200);
+```
+
+---
+
+## Key Design Decisions
+
+- **`cancelLocked()` private helper.** `modifyOrder` already holds a `unique_lock` on `mutex_` when it needs to remove the existing order. Calling the public `cancelOrder` would attempt to acquire the same lock and deadlock. The private `cancelLocked()` performs the cancellation assuming the lock is already held by the caller.
+
+- **Stop-loss batch pipeline.** After each trade, `checkStopTriggers` scans `pending_stops_` and moves all newly triggered orders into a separate `triggered_stops_` vector, then clears `pending_stops_`. Processing is done from the staged batch rather than the live list, which correctly handles cascading triggers where one stop's fill triggers another stop.
+
+- **Iceberg replenishment in-place.** When the visible tranche of an iceberg order is consumed, `replenish()` refills `display_qty_` from `hidden_qty_` using the original `orig_display_qty_` as the replenishment size. The order pointer remains at its current position in the price-level deque, preserving time priority within the visible quantity, consistent with standard exchange iceberg semantics.
+
+- **`MemoryPool` placement-new outside the lock.** Once a block is removed from the free list, no other thread can reach it until it is returned via `deallocate`. The mutex is released before calling `::new (block->data) T(...)`, so constructor execution does not hold the pool lock. This keeps allocation latency low when constructors are non-trivial.
+
+---
 
 ## Building
 
-**Requires:** GCC 8+ / Clang 7+, CMake 3.14+, C++17
+Requires CMake >= 3.14 and a C++17-capable compiler. The project uses POSIX threads.
 
 ```bash
-# Default release build (orderbook demo binary)
+# Release build (default)
 make
 
-# Debug build with AddressSanitizer + UBSan
+# Debug build with AddressSanitizer and UBSan
 make debug
 
-# Run test suite
+# Build and run the test suite
 make tests
 
-# Run benchmarks
+# Build benchmarks
 make benchmarks
-./build-bench/benchmark/lob_benchmark
-./build-bench/benchmark/baseline_stl
+
+# Run the demo binary
+make run
 ```
 
-## Benchmark results
+Produced binaries:
 
-Measured on an AMD Ryzen 5 4600H @ 3.0 GHz, WSL2, 200 000-event synthetic workload (65 % limit, 20 % market, 15 % cancel, prices normally distributed ±$1 around $100).
+| Target | Path |
+|--------|------|
+| Demo binary | `build/orderbook` |
+| Test suite | `build-tests/tests/lob_tests` |
+| Benchmark | `build-bench/benchmark/lob_benchmark` |
 
-### Order processing latency (single-threaded)
+### CMake directly
 
-| Metric  | Latency |
-|---------|---------|
-| Min     | 0.037 µs |
-| Avg     | 0.263 µs |
-| P50     | 0.181 µs |
-| P95     | 0.492 µs |
-| P99     | 1.045 µs |
-| P99.9   | 2.522 µs |
+```bash
+# Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
 
-**Throughput:** ~3.4 M orders/sec (latency mode) · ~4.6 M orders/sec (throughput mode)
+# With tests
+cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
+cmake --build build-tests --parallel
+./build-tests/tests/lob_tests
 
-### Modify-order latency
+# With benchmarks
+cmake -S . -B build-bench -DCMAKE_BUILD_TYPE=Release -DBUILD_BENCHMARKS=ON
+cmake --build build-bench --parallel
+```
 
-| Metric | Latency |
-|--------|---------|
-| Avg    | 0.255 µs |
-| P99    | 0.341 µs |
+---
 
-### Concurrent engine (4 producer threads)
+## Benchmark Results
+
+Measured on an AMD Ryzen 5 4600H running WSL2 (Linux), 200,000 events per run.
+
+### Submission latency — single-threaded
 
 | Metric | Value |
 |--------|-------|
-| Throughput | ~2.7 M events/sec |
-| Events processed | 200 000 |
+| Min | 0.037 µs |
+| Avg | 0.263 µs |
+| P50 | 0.181 µs |
+| P95 | 0.492 µs |
+| P99 | 1.045 µs |
+| P99.9 | 2.522 µs |
 
-## Order types
+### Throughput — single-threaded
 
-### Limit order
-```cpp
-MatchingEngine engine;
-uint64_t id = engine.submitLimit(Side::BUY, 1000000LL, 100);  // $100.00, qty 100
-```
+| Mode | Orders / sec |
+|------|-------------|
+| Latency mode | ~3.4 M |
+| Throughput mode | ~4.6 M |
 
-### Market order
-```cpp
-engine.submitMarket(Side::SELL, 50);   // fills at best available bid
-```
+### Modify latency — single-threaded
 
-### Iceberg order
-```cpp
-// $100.00, 500 total, 100 visible at a time
-uint64_t id = engine.submitIceberg(Side::BUY, 1000000LL, 500, 100);
-```
+| Metric | Value |
+|--------|-------|
+| Avg | 0.255 µs |
+| P99 | 0.341 µs |
 
-### Stop-loss order
-```cpp
-// Triggers when last trade ≤ $99.50; then submits limit sell at $99.40
-uint64_t id = engine.submitStopLoss(Side::SELL, 995000LL, 994000LL, 100);
-```
+### Concurrent throughput
 
-### Cancel / modify
-```cpp
-engine.cancelOrder(id);
-engine.modifyOrder(id, 985000LL, 80);   // new price + qty, loses time priority
-```
+| Threads | Events / sec |
+|---------|-------------|
+| 4 producers + 1 consumer | ~2.7 M |
 
-## Market depth
+---
 
-```
-=== Market Depth (Top 5 Levels) ===
-       Price       Qty    Cumulative
-------------------------------------
-ASKS:
-      102.50       100           350
-      102.00        85           250
-      101.50        70           165
-      101.00        55            95
-      100.50        40            40
---- spread: $1.00 ---
-BIDS:
-       99.50        50            50
-       99.00        60           110
-       98.50        70           180
-       98.00        80           260
-       97.50        90           350
-====================================
-```
+## Test Suite
 
-## Test suite
+Run with:
 
 ```bash
 make tests
 ./build-tests/tests/lob_tests
 ```
 
-53 tests across 5 modules:
-
 | Module | Tests | Covers |
 |--------|-------|--------|
-| Order | 12 | constructors, fill, replenish, iceberg lots, stop-loss trigger |
-| OrderBook | 16 | crossing, FIFO priority, cancel, modify, iceberg, stop-loss |
-| MatchingEngine | 11 | submission, thread safety, cancel/modify under concurrency |
-| MemoryPool | 8 | alloc/dealloc, growth, address aliasing, concurrent use |
-| ConcurrentQueue | 6 | SPSC ordering, MPSC delivery, MPMC stress |
+| Order | 12 | Construction, fill, cancel, iceberg replenish, stop-loss trigger |
+| OrderBook | 16 | Price-time priority, partial fills, iceberg matching, stop-loss pipeline, cancel, modify, spread |
+| MatchingEngine | 11 | Submit limit/market/iceberg/stop-loss, cancel, modify, verbose logging, pool stats |
+| MemoryPool | 8 | Allocation, deallocation, slab growth, capacity tracking, concurrent alloc/free |
+| ConcurrentQueue | 6 | Enqueue/dequeue, empty queue, multi-producer ordering, sentinel drain |
+| **Total** | **53** | |
 
-## Project structure
+---
+
+## Project Structure
 
 ```
-include/
-  order.h              Order type with iceberg + stop-loss support
-  orderbook.h          Price-time book with shared_mutex
-  matching_engine.h    Public API + memory pool integration
-  memory_pool.h        Slab allocator with PoolDeleter
-
-src/
-  order.cpp
-  orderbook.cpp
-  matching_engine.cpp
-  main.cpp             Demo: iceberg, stop-loss, multi-threaded, market depth
-
-benchmark/
-  benchmark.h          BenchmarkTimer + PerformanceStats
-  order_event.h        OrderEvent struct for queue-based dispatch
-  concurrent_queue.h   Michael-Scott MPMC lock-free queue
-  lob_benchmark.cpp    Synthetic workload: latency, throughput, modify
-  concurrent_matching_engine.h/.cpp  MPSC event-driven engine
-  baseline_stl.cpp     Naive STL baseline for comparison
-
-tests/
-  framework.h          Minimal test framework (ASSERT, RUN_TEST macros)
-  test_order.cpp
-  test_orderbook.cpp
-  test_matching_engine.cpp
-  test_memory_pool.cpp
-  test_concurrent.cpp
-  test_main.cpp
+limit-order-book-matching-engine/
+├── include/
+│   ├── order.h               # Order class, Side/OrderKind/OrderStatus enums, PRICE_SCALE
+│   ├── orderbook.h           # OrderBook class, Trade struct
+│   ├── matching_engine.h     # MatchingEngine facade
+│   └── memory_pool.h         # MemoryPool<T> slab allocator, PoolDeleter
+├── src/
+│   ├── order.cpp
+│   ├── orderbook.cpp
+│   ├── matching_engine.cpp
+│   └── main.cpp              # Demo: iceberg, stop-loss, multi-threaded, depth view
+├── benchmark/
+│   ├── lob_benchmark.cpp     # Synthetic workload benchmark
+│   ├── baseline_stl.cpp      # STL-only baseline for comparison
+│   ├── concurrent_matching_engine.h
+│   ├── concurrent_matching_engine.cpp
+│   ├── concurrent_queue.h    # Lock-free Michael-Scott queue
+│   ├── order_event.h         # Tagged-union event type
+│   ├── benchmark.h
+│   ├── Makefile
+│   └── README.md
+├── tests/
+│   ├── CMakeLists.txt
+│   ├── framework.h           # Minimal test framework (no external deps)
+│   ├── test_main.cpp
+│   ├── test_order.cpp
+│   ├── test_orderbook.cpp
+│   ├── test_matching_engine.cpp
+│   ├── test_memory_pool.cpp
+│   └── test_concurrent.cpp
+├── CMakeLists.txt
+└── Makefile
 ```
+
+---
 
 ## License
 
